@@ -1,11 +1,11 @@
 -- ============================================================================
--- ORDER-TO-AUDIT SYSTEM: DATABASE MIGRATION 004
--- Database Views: Stock, Balances, Costing, Variance & Audit Reports
+-- ORDER-TO-AUDIT SYSTEM: DATABASE MIGRATION 005
+-- Analytical Views: True Moving WAC Stock, Allocations & Statutory Reports
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 1. REAL-TIME CURRENT STOCK BALANCE & VALUATION VIEW
--- Strictly derives stock from base units in the ledger without drift
+-- 1. REAL-TIME CURRENT STOCK BALANCE & TRUE MOVING WAC VIEW
+-- Uses item_stock_balances (maintained via transactional posting engine)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_stock AS
 SELECT 
@@ -15,29 +15,25 @@ SELECT
     i.item_type,
     i.base_uom_id,
     i.packets_per_carton,
-    COALESCE(SUM(l.base_quantity_delta), 0.0000) AS closing_stock_base_qty,
-    -- Equivalent cartons for finished goods packaging
+    COALESCE(sb.current_base_qty, 0.0000) AS closing_stock_base_qty,
+    -- Equivalent cartons for finished goods based on product-specific conversion
     CASE 
         WHEN i.packets_per_carton > 1 AND i.item_type = 'finished_good'
-        THEN ROUND(COALESCE(SUM(l.base_quantity_delta), 0.0000) / i.packets_per_carton, 2)
+        THEN ROUND(COALESCE(sb.current_base_qty, 0.0000) / i.packets_per_carton, 2)
         ELSE NULL
     END AS equivalent_cartons,
-    -- Moving weighted average unit valuation
-    CASE 
-        WHEN COALESCE(SUM(l.base_quantity_delta), 0.0000) > 0 
-        THEN ROUND(COALESCE(SUM(l.total_cost), 0.00) / SUM(l.base_quantity_delta), 4)
-        ELSE i.standard_purchase_rate
-    END AS current_moving_wac,
-    COALESCE(SUM(l.total_cost), 0.00) AS total_stock_valuation,
+    -- Continuous Moving Weighted Average Cost (WAC)
+    COALESCE(sb.current_moving_wac, i.standard_purchase_rate) AS current_moving_wac,
+    COALESCE(sb.current_total_value, 0.00) AS total_stock_valuation,
     i.min_reorder_level,
     CASE 
-        WHEN COALESCE(SUM(l.base_quantity_delta), 0.0000) <= i.min_reorder_level 
+        WHEN COALESCE(sb.current_base_qty, 0.0000) <= i.min_reorder_level 
         THEN true 
         ELSE false 
-    END AS is_low_stock_alert
+    END AS is_low_stock_alert,
+    sb.last_transaction_timestamp
 FROM items i
-LEFT JOIN inventory_ledger l ON i.id = l.item_id
-GROUP BY i.id, i.sku, i.name, i.item_type, i.base_uom_id, i.packets_per_carton, i.standard_purchase_rate, i.min_reorder_level;
+LEFT JOIN item_stock_balances sb ON i.id = sb.item_id;
 
 -- ----------------------------------------------------------------------------
 -- 2. AUDITOR STOCK LEDGER (Detailed Movement Register)
@@ -66,8 +62,7 @@ JOIN users u ON l.created_by = u.id
 ORDER BY l.transaction_timestamp DESC, l.id DESC;
 
 -- ----------------------------------------------------------------------------
--- 3. INVOICE BALANCES & DERIVED PAYMENT STATUS
--- Dynamically derives outstanding amounts without storing redundant mutable fields
+-- 3. INVOICE BALANCES & PAYMENT STATUS DERIVED FROM ALLOCATIONS
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_invoice_balances AS
 SELECT 
@@ -84,33 +79,32 @@ SELECT
     inv.sgst_amount,
     inv.igst_amount,
     inv.total_invoice_value,
-    COALESCE(SUM(pay.amount), 0.00) AS total_paid_amount,
-    COALESCE(cn.total_credited, 0.00) AS total_credit_note_amount,
-    ROUND(inv.total_invoice_value - COALESCE(SUM(pay.amount), 0.00) - COALESCE(cn.total_credited, 0.00), 2) AS outstanding_balance,
+    COALESCE(pa.total_allocated, 0.00) AS total_paid_amount,
+    COALESCE(cn.total_credited, 0.00) AS total_credited_amount,
+    ROUND(inv.total_invoice_value - COALESCE(pa.total_allocated, 0.00) - COALESCE(cn.total_credited, 0.00), 2) AS outstanding_balance,
     CASE 
         WHEN inv.status = 'cancelled' THEN 'cancelled'
-        WHEN (inv.total_invoice_value - COALESCE(SUM(pay.amount), 0.00) - COALESCE(cn.total_credited, 0.00)) <= 0 THEN 'paid'
-        WHEN COALESCE(SUM(pay.amount), 0.00) > 0 THEN 'partially_paid'
+        WHEN (inv.total_invoice_value - COALESCE(pa.total_allocated, 0.00) - COALESCE(cn.total_credited, 0.00)) <= 0 THEN 'paid'
+        WHEN COALESCE(pa.total_allocated, 0.00) > 0 THEN 'partially_paid'
         ELSE 'unpaid'
     END AS derived_payment_status,
     inv.status AS invoice_status,
     inv.created_at
 FROM invoices inv
 JOIN parties p ON inv.customer_id = p.id
-LEFT JOIN payments pay ON inv.id = pay.invoice_id
+LEFT JOIN (
+    SELECT invoice_id, SUM(allocated_amount) AS total_allocated
+    FROM payment_allocations
+    GROUP BY invoice_id
+) pa ON inv.id = pa.invoice_id
 LEFT JOIN (
     SELECT invoice_id, SUM(total_credit_amount) AS total_credited
     FROM credit_notes
     GROUP BY invoice_id
-) cn ON inv.id = cn.invoice_id
-GROUP BY 
-    inv.id, inv.invoice_number, inv.financial_year, inv.invoice_date, 
-    p.id, p.trade_name, p.state_code, inv.is_interstate, inv.taxable_value, 
-    inv.cgst_amount, inv.sgst_amount, inv.igst_amount, inv.total_invoice_value, 
-    cn.total_credited, inv.status, inv.created_at;
+) cn ON inv.id = cn.invoice_id;
 
 -- ----------------------------------------------------------------------------
--- 4. CUSTOMER OUTSTANDING & AGEING SUMMARY
+-- 4. CUSTOMER RECEIVABLES & UNALLOCATED ADVANCES SUMMARY
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_customer_outstanding AS
 SELECT 
@@ -120,22 +114,29 @@ SELECT
     p.phone,
     p.credit_limit,
     COALESCE(SUM(ib.total_invoice_value), 0.00) AS total_billed,
-    COALESCE(SUM(ib.total_paid_amount), 0.00) AS total_collected,
-    COALESCE(SUM(ib.total_credit_note_amount), 0.00) AS total_credited,
-    COALESCE(SUM(ib.outstanding_balance), 0.00) AS net_receivable,
-    -- Ageing buckets based on invoice date
+    COALESCE(SUM(ib.total_paid_amount), 0.00) AS total_allocated_to_invoices,
+    COALESCE(pay_tot.total_payments, 0.00) AS total_payments_received,
+    -- Any excess payment not yet allocated to an invoice is an on-account advance
+    ROUND(COALESCE(pay_tot.total_payments, 0.00) - COALESCE(SUM(ib.total_paid_amount), 0.00), 2) AS unallocated_advances,
+    COALESCE(SUM(ib.total_credited_amount), 0.00) AS total_credited,
+    COALESCE(SUM(ib.outstanding_balance), 0.00) AS net_invoice_receivables,
+    -- Statutory ageing buckets based on invoice date
     COALESCE(SUM(CASE WHEN CURRENT_DATE - ib.invoice_date <= 30 THEN ib.outstanding_balance ELSE 0 END), 0.00) AS ageing_0_to_30_days,
     COALESCE(SUM(CASE WHEN CURRENT_DATE - ib.invoice_date BETWEEN 31 AND 60 THEN ib.outstanding_balance ELSE 0 END), 0.00) AS ageing_31_to_60_days,
     COALESCE(SUM(CASE WHEN CURRENT_DATE - ib.invoice_date BETWEEN 61 AND 90 THEN ib.outstanding_balance ELSE 0 END), 0.00) AS ageing_61_to_90_days,
     COALESCE(SUM(CASE WHEN CURRENT_DATE - ib.invoice_date > 90 THEN ib.outstanding_balance ELSE 0 END), 0.00) AS ageing_over_90_days
 FROM parties p
-LEFT JOIN v_invoice_balances ib ON p.id = ib.customer_id AND ib.invoice_status != 'cancelled'
+LEFT JOIN v_invoice_balances ib ON p.id = ib.customer_id AND ib.invoice_status <> 'cancelled'
+LEFT JOIN (
+    SELECT customer_id, SUM(total_amount) AS total_payments
+    FROM payments
+    GROUP BY customer_id
+) pay_tot ON p.id = pay_tot.customer_id
 WHERE p.party_type IN ('customer', 'both')
-GROUP BY p.id, p.trade_name, p.state_name, p.phone, p.credit_limit;
+GROUP BY p.id, p.trade_name, p.state_name, p.phone, p.credit_limit, pay_tot.total_payments;
 
 -- ----------------------------------------------------------------------------
 -- 5. PRODUCTION VARIANCE & MASS BALANCE VIEW
--- Compares planned vs actual consumption and planned vs actual yield
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_production_variance AS
 SELECT 
@@ -191,7 +192,7 @@ SELECT
     SUM(ii.total_item_value) AS total_gross_value
 FROM invoices inv
 JOIN invoice_items ii ON inv.id = ii.invoice_id
-WHERE inv.status != 'cancelled'
+WHERE inv.status <> 'cancelled'
 GROUP BY 
     inv.financial_year, 
     TO_CHAR(inv.invoice_date, 'YYYY-MM'), 
