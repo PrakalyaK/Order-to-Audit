@@ -4,6 +4,10 @@ import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import itemsRoutes from './modules/items/items.routes.js';
+import unitsRoutes from './modules/units/units.routes.js';
+import partiesRoutes from './modules/parties/parties.routes.js';
+import bomsRoutes from './modules/boms/boms.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
@@ -62,6 +66,10 @@ app.get('/', (req, res) => {
 
 // Mount Routes
 app.use(`${env.apiPrefix}/auth`, authRoutes);
+app.use(`${env.apiPrefix}/items`, itemsRoutes);
+app.use(`${env.apiPrefix}/units`, unitsRoutes);
+app.use(`${env.apiPrefix}/parties`, partiesRoutes);
+app.use(`${env.apiPrefix}/boms`, bomsRoutes);
 app.use(`${env.apiPrefix}/health`, healthRoutes);
 app.use('/health', healthRoutes);
 
