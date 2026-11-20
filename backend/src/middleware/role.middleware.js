@@ -1,12 +1,19 @@
 import { ApiError } from '../utils/ApiError.js';
 
 /**
- * Role-Based Access Control Middleware (Phase 2 Foundation Stub)
+ * Role-Based Access Control Middleware
  * Restricts access to specified roles: owner, factory_admin, production_supervisor, salesman, auditor.
  * 
- * @param  {...string} allowedRoles
+ * @param {...string} allowedRoles
  */
 export const authorizeRoles = (...allowedRoles) => (req, res, next) => {
-  // To be implemented in Phase 2
+  if (!req.user) {
+    return next(ApiError.unauthorized('Authentication required'));
+  }
+
+  if (!allowedRoles.includes(req.user.role)) {
+    return next(ApiError.forbidden('You do not have permission to access this resource'));
+  }
+
   next();
 };

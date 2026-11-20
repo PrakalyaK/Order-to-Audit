@@ -25,4 +25,11 @@ export const env = {
     idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT_MS, 10) || 30000,
     connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT_MS, 10) || 5000,
   },
+  jwt: {
+    secret: process.env.JWT_SECRET || 'order_to_audit_jwt_secret_key_2026_super_secure_phase2',
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+  },
+  bcrypt: {
+    saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10,
+  },
 };

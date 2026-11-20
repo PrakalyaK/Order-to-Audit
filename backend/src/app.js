@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import { env } from './config/env.js';
+import authRoutes from './modules/auth/auth.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
@@ -59,7 +60,8 @@ app.get('/', (req, res) => {
   });
 });
 
-// Mount Health Check endpoint under API prefix and root alias
+// Mount Routes
+app.use(`${env.apiPrefix}/auth`, authRoutes);
 app.use(`${env.apiPrefix}/health`, healthRoutes);
 app.use('/health', healthRoutes);
 
