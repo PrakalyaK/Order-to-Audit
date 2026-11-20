@@ -1,3 +1,4 @@
+\set ON_ERROR_STOP on
 -- ============================================================================
 -- ORDER-TO-AUDIT SYSTEM: BENCHMARK VERIFICATION SCRIPT
 -- Queries verifying each business rule and expected result from Section 5
