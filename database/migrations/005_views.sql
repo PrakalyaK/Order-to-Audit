@@ -73,6 +73,7 @@ SELECT
     p.id AS customer_id,
     p.trade_name AS customer_name,
     p.state_code AS customer_state_code,
+    inv.place_of_supply_state_code,
     inv.is_interstate,
     inv.taxable_value,
     inv.cgst_amount,

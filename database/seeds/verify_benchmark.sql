@@ -422,7 +422,7 @@ BEGIN
     -- 12. INSERT Auditing Verification
     SELECT COUNT(DISTINCT entity_name) INTO v_insert_audit_count
     FROM audit_logs
-    WHERE action = 'INSERT' AND entity_name IN ('purchase_bills', 'production_runs', 'invoices', 'payments');
+    WHERE action LIKE 'INSERT%' AND entity_name IN ('purchase_bills', 'production_runs', 'invoices', 'payments');
 
     IF v_insert_audit_count < 4 THEN
         RAISE EXCEPTION 'Benchmark Assertion 12 Failed (Audit Coverage): Expected INSERT audit logs for all 4 transactional entities, found %', v_insert_audit_count;

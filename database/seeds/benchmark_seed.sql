@@ -93,7 +93,10 @@ INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, 
 ('dddddddd-dddd-dddd-dddd-dddddddddddd', 500.0000, 2.5000, 1250.00),
 ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 30.0000, 15.0000, 450.00),
 ('ffffffff-ffff-ffff-ffff-ffffffffffff', 50.0000, 30.0000, 1500.00)
-ON CONFLICT (item_id) DO NOTHING;
+ON CONFLICT (item_id) DO UPDATE SET
+    current_base_qty = EXCLUDED.current_base_qty,
+    current_moving_wac = EXCLUDED.current_moving_wac,
+    current_total_value = EXCLUDED.current_total_value;
 
 INSERT INTO inventory_ledger (
     transaction_timestamp, item_id, batch_number, movement_type, 
