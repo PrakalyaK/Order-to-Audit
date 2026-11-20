@@ -13,8 +13,8 @@ BEGIN;
 -- ----------------------------------------------------------------------------
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM purchase_bills WHERE id = 'pb000001-0000-0000-0000-000000000001') 
-       OR EXISTS (SELECT 1 FROM production_runs WHERE id = 'pr000001-0000-0000-0000-000000000001') THEN
+    IF EXISTS (SELECT 1 FROM purchase_bills WHERE id = 'ba000001-0000-0000-0000-000000000001') 
+       OR EXISTS (SELECT 1 FROM production_runs WHERE id = 'da000001-0000-0000-0000-000000000001') THEN
         RAISE EXCEPTION 'Benchmark Seed Safety Violation: The benchmark scenario has already been seeded in this database. Rerunning this seed without resetting would corrupt the stock ledger and moving WAC. To perform a clean test run, execute database/scripts/dev_reset.sql first.';
     END IF;
 END $$;
@@ -110,10 +110,12 @@ INSERT INTO inventory_ledger (
 -- ============================================================================
 -- BENCHMARK STEP 1: PURCHASE 60 KG FLOUR @ ₹45/KG
 -- ============================================================================
+-- BENCHMARK STEP 1: PURCHASE 60 KG FLOUR @ ₹45/KG
+-- ============================================================================
 INSERT INTO purchase_bills (
     id, supplier_id, bill_number, bill_date, subtotal_amount, cgst_amount, sgst_amount, total_amount, status, received_by
 ) VALUES (
-    'pb000001-0000-0000-0000-000000000001',
+    'ba000001-0000-0000-0000-000000000001',
     '99999999-9999-9999-9999-999999999999',
     'INV-TRICHY-842',
     '2026-11-10',
@@ -125,15 +127,15 @@ INSERT INTO purchase_bills (
 INSERT INTO purchase_bill_items (
     id, purchase_bill_id, item_id, supplier_batch_no, quantity, uom_id, base_quantity, unit_rate, taxable_amount, gst_rate_pct, tax_amount, total_amount
 ) VALUES (
-    'pbi00001-0000-0000-0000-000000000001',
-    'pb000001-0000-0000-0000-000000000001',
+    'ba000011-0000-0000-0000-000000000001',
+    'ba000001-0000-0000-0000-000000000001',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     'FLOUR-LOT-902',
     60.0000, 'KG', 60.0000, 45.00, 2700.00, 5.00, 135.00, 2835.00
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Execute atomic receipt posting (Updates Flour WAC to ₹43.1250/kg and stock to 160 kg)
-SELECT fn_post_purchase_receipt('pb000001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333');
+SELECT fn_post_purchase_receipt('ba000001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333');
 
 -- ============================================================================
 -- BENCHMARK STEP 2 & 3: PRODUCTION RUN OF MURUKKU 200G
@@ -145,7 +147,7 @@ INSERT INTO production_runs (
     planned_batch_count, standard_batch_size, planned_yield_qty, actual_good_output_qty, actual_scrap_output_qty,
     yield_variance_pct, is_yield_flagged, status, supervisor_id
 ) VALUES (
-    'pr000001-0000-0000-0000-000000000001',
+    'da000001-0000-0000-0000-000000000001',
     'PR-2026-11-001',
     'b0000001-0000-0000-0000-000000000001',
     'ffffffff-ffff-ffff-ffff-ffffffffffff',
@@ -160,24 +162,24 @@ INSERT INTO production_run_inputs (
     id, production_run_id, item_id, planned_qty, actual_issued_qty, good_production_qty, damaged_or_scrap_qty, returned_to_store_qty,
     uom_id, base_net_consumed_qty, unit_cost_applied, total_material_cost, consumption_variance_qty, consumption_variance_pct, is_consumption_flagged
 ) VALUES
-('pri00001-0000-0000-0000-000000000001', 'pr000001-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 40.0000, 40.0000, 40.0000, 0.0000, 0.0000, 'KG', 40.0000, 43.1250, 1725.00, 0.0000, 0.00, false),
-('pri00002-0000-0000-0000-000000000002', 'pr000001-0000-0000-0000-000000000001', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 10.0000, 10.5000, 10.5000, 0.0000, 0.0000, 'L', 10.5000, 140.0000, 1470.00, 0.5000, 5.00, true),
-('pri00003-0000-0000-0000-000000000003', 'pr000001-0000-0000-0000-000000000001', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 1.2000, 1.2000, 1.2000, 0.0000, 0.0000, 'KG', 1.2000, 200.0000, 240.00, 0.0000, 0.00, false),
-('pri00004-0000-0000-0000-000000000004', 'pr000001-0000-0000-0000-000000000001', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 200.0000, 194.0000, 188.0000, 6.0000, 0.0000, 'PCS', 194.0000, 2.5000, 485.00, -6.0000, -3.00, false),
-('pri00005-0000-0000-0000-000000000005', 'pr000001-0000-0000-0000-000000000001', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 10.0000, 9.0000, 9.0000, 0.0000, 0.0000, 'PCS', 9.0000, 15.0000, 135.00, -1.0000, -10.00, true)
+('da000011-0000-0000-0000-000000000001', 'da000001-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 40.0000, 40.0000, 40.0000, 0.0000, 0.0000, 'KG', 40.0000, 43.1250, 1725.00, 0.0000, 0.00, false),
+('da000012-0000-0000-0000-000000000002', 'da000001-0000-0000-0000-000000000001', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 10.0000, 10.5000, 10.5000, 0.0000, 0.0000, 'L', 10.5000, 140.0000, 1470.00, 0.5000, 5.00, true),
+('da000013-0000-0000-0000-000000000003', 'da000001-0000-0000-0000-000000000001', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 1.2000, 1.2000, 1.2000, 0.0000, 0.0000, 'KG', 1.2000, 200.0000, 240.00, 0.0000, 0.00, false),
+('da000014-0000-0000-0000-000000000004', 'da000001-0000-0000-0000-000000000001', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 200.0000, 194.0000, 188.0000, 6.0000, 0.0000, 'PCS', 194.0000, 2.5000, 485.00, -6.0000, -3.00, false),
+('da000015-0000-0000-0000-000000000005', 'da000001-0000-0000-0000-000000000001', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 10.0000, 9.0000, 9.0000, 0.0000, 0.0000, 'PCS', 9.0000, 15.0000, 135.00, -1.0000, -10.00, true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Overheads for the Run (Labour ₹1,200, Gas/Power ₹600)
 INSERT INTO production_run_overheads (id, production_run_id, overhead_type, description, amount) VALUES
-('pro00001-0000-0000-0000-000000000001', 'pr000001-0000-0000-0000-000000000001', 'labour', 'Floor 4-operator batch frying & packaging', 1200.00),
-('pro00002-0000-0000-0000-000000000002', 'pr000001-0000-0000-0000-000000000001', 'power_gas', 'LPG cylinder consumption & fryer motor power', 600.00)
+('da000021-0000-0000-0000-000000000001', 'da000001-0000-0000-0000-000000000001', 'labour', 'Floor 4-operator batch frying & packaging', 1200.00),
+('da000022-0000-0000-0000-000000000002', 'da000001-0000-0000-0000-000000000001', 'power_gas', 'LPG cylinder consumption & fryer motor power', 600.00)
 ON CONFLICT (id) DO NOTHING;
 
 -- Execute atomic production issue (Deducts raw & packaging materials, prevents negative stock)
-SELECT fn_post_production_issue('pr000001-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444');
+SELECT fn_post_production_issue('da000001-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444');
 
 -- Execute atomic production yield (Posts 188 pkts, updates Finished Goods Moving WAC to ₹30.9034/pkt)
-SELECT fn_post_production_yield('pr000001-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444');
+SELECT fn_post_production_yield('da000001-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444');
 
 -- ============================================================================
 -- BENCHMARK STEP 4 & 5: SALESMAN A ORDERS 150 PKTS FOR RETAILER A (TAMIL NADU)
@@ -187,7 +189,7 @@ INSERT INTO sales_orders (
     id, order_number, customer_id, salesman_id, order_date, offline_client_uuid, status,
     subtotal_amount, estimated_tax_amount, total_order_value
 ) VALUES (
-    'so000001-0000-0000-0000-000000000001',
+    'ea000001-0000-0000-0000-000000000001',
     'SO-2026-0001',
     '77777777-7777-7777-7777-777777777777',
     '11111111-1111-1111-1111-111111111111',
@@ -201,7 +203,7 @@ INSERT INTO sales_order_items (
     sales_order_id, item_id, item_name_snapshot, hsn_code_snapshot,
     ordered_qty, approved_qty, uom_id, unit_price, gst_rate_pct, taxable_value, total_item_value
 ) VALUES (
-    'so000001-0000-0000-0000-000000000001',
+    'ea000001-0000-0000-0000-000000000001',
     'ffffffff-ffff-ffff-ffff-ffffffffffff',
     'Murukku 200g Packet',
     '1905',
@@ -214,10 +216,10 @@ INSERT INTO invoices (
     place_of_supply_state_code, is_interstate, taxable_value, cgst_amount, sgst_amount, igst_amount,
     total_invoice_value, status, approved_by
 ) VALUES (
-    'inv00001-0000-0000-0000-000000000001',
+    'fa000001-0000-0000-0000-000000000001',
     'INV/2026-27/0001',
     '2026-2027',
-    'so000001-0000-0000-0000-000000000001',
+    'ea000001-0000-0000-0000-000000000001',
     '77777777-7777-7777-7777-777777777777',
     '2026-11-19',
     '33', false, 7500.00, 187.50, 187.50, 0.00,
@@ -229,7 +231,7 @@ INSERT INTO invoice_items (
     unit_price, taxable_value, gst_rate_pct, cgst_rate_pct, cgst_amount, sgst_rate_pct, sgst_amount,
     igst_rate_pct, igst_amount, total_item_value
 ) VALUES (
-    'inv00001-0000-0000-0000-000000000001',
+    'fa000001-0000-0000-0000-000000000001',
     'ffffffff-ffff-ffff-ffff-ffffffffffff',
     'Murukku 200g Packet',
     '1905',
@@ -242,9 +244,9 @@ INSERT INTO invoice_items (
 INSERT INTO dispatches (
     id, dispatch_number, invoice_id, dispatch_date, carrier_or_vehicle_no, driver_name, status, dispatched_by
 ) VALUES (
-    'dsp00001-0000-0000-0000-000000000001',
+    'eb000001-0000-0000-0000-000000000001',
     'DSP-2026-0001',
-    'inv00001-0000-0000-0000-000000000001',
+    'fa000001-0000-0000-0000-000000000001',
     '2026-11-19',
     'TN-59-AX-4412',
     'K. Velu',
@@ -255,15 +257,15 @@ INSERT INTO dispatches (
 INSERT INTO dispatch_items (
     id, dispatch_id, item_id, batch_number, dispatched_qty, uom_id, base_quantity
 ) VALUES (
-    'dspi0001-0000-0000-0000-000000000001',
-    'dsp00001-0000-0000-0000-000000000001',
+    'ec000001-0000-0000-0000-000000000001',
+    'eb000001-0000-0000-0000-000000000001',
     'ffffffff-ffff-ffff-ffff-ffffffffffff',
     'BAT-MRK-20261119-01',
     150.0000, 'PKT', 150.0000
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Execute atomic dispatch (Finished goods drop from 238 to 88 pkts)
-SELECT fn_post_sales_dispatch('dsp00001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333');
+SELECT fn_post_sales_dispatch('eb000001-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333');
 
 -- ============================================================================
 -- BENCHMARK STEP 6: SALESMAN B ORDERS 120 PKTS FOR DISTRIBUTOR B (KARNATAKA)
@@ -273,7 +275,7 @@ INSERT INTO sales_orders (
     id, order_number, customer_id, salesman_id, order_date, offline_client_uuid, status,
     subtotal_amount, estimated_tax_amount, total_order_value, notes
 ) VALUES (
-    'so000002-0000-0000-0000-000000000002',
+    'ea000002-0000-0000-0000-000000000002',
     'SO-2026-0002',
     '88888888-8888-8888-8888-888888888888',
     '22222222-2222-2222-2222-222222222222',
@@ -288,7 +290,7 @@ INSERT INTO sales_order_items (
     sales_order_id, item_id, item_name_snapshot, hsn_code_snapshot,
     ordered_qty, approved_qty, uom_id, unit_price, gst_rate_pct, taxable_value, total_item_value
 ) VALUES (
-    'so000002-0000-0000-0000-000000000002',
+    'ea000002-0000-0000-0000-000000000002',
     'ffffffff-ffff-ffff-ffff-ffffffffffff',
     'Murukku 200g Packet',
     '1905',
@@ -301,7 +303,7 @@ INSERT INTO sales_order_items (
 INSERT INTO payments (
     id, receipt_number, customer_id, payment_date, total_amount, payment_mode, reference_txn_id, recorded_by
 ) VALUES (
-    'pay00001-0000-0000-0000-000000000001',
+    'ed000001-0000-0000-0000-000000000001',
     'REC-2026-0001',
     '77777777-7777-7777-7777-777777777777',
     '2026-11-19',
@@ -313,8 +315,8 @@ INSERT INTO payments (
 
 -- Allocate ₹4,000 to Retailer A's invoice (Outstanding becomes ₹3,875.00)
 SELECT fn_allocate_payment(
-    'pay00001-0000-0000-0000-000000000001',
-    'inv00001-0000-0000-0000-000000000001',
+    'ed000001-0000-0000-0000-000000000001',
+    'fa000001-0000-0000-0000-000000000001',
     4000.00,
     '33333333-3333-3333-3333-333333333333'
 );
