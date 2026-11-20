@@ -2,15 +2,34 @@
 -- ORDER-TO-AUDIT SYSTEM: DATABASE MIGRATION 000
 -- Explicit Schema Upgrade Script for Existing Databases
 -- ============================================================================
--- NOTE:
--- For fresh installations, database/setup.sql runs migrations 001 through 005.
--- If you already have an existing database from the initial schema draft, run
--- this upgrade script first to alter existing tables and migrate structures.
+-- SCOPE & COMPATIBILITY SPECIFICATION:
+--   Supported Source Version: Order-to-Audit Draft Schema v1.0
+--     (Identified by: invoices table having mutable amount_paid and balance_due 
+--      columns, and missing payment_allocations table).
+--   Target Destination: Order-to-Audit Certified Schema v2.0
+--   
+--   WARNING: This upgrade script is tailored specifically for upgrading from v1.0.
+--   It does NOT support arbitrary older schemas or untracked legacy databases.
+--   For fresh installations, use database/setup.sql directly.
 -- ============================================================================
 
+-- Step A: Ensure payment_allocations table exists prior to data reconciliation
+CREATE TABLE IF NOT EXISTS payment_allocations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id UUID NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
+    allocated_amount NUMERIC(12, 2) NOT NULL CHECK (allocated_amount > 0),
+    allocated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    allocated_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_payment_invoice_alloc UNIQUE (payment_id, invoice_id)
+);
+
 DO $$ 
+DECLARE
+    v_inv RECORD;
+    v_new_payment_id UUID;
 BEGIN
-    -- 1. Upgrade items table
+    -- 1. Upgrade items table with packets_per_carton
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'items' AND column_name = 'packets_per_carton') THEN
         ALTER TABLE items ADD COLUMN packets_per_carton NUMERIC(10, 2) NOT NULL DEFAULT 1.00;
     END IF;
@@ -41,8 +60,45 @@ BEGIN
         ALTER TABLE production_run_inputs ADD COLUMN base_net_consumed_qty NUMERIC(14, 4) NOT NULL DEFAULT 0.0000;
     END IF;
 
-    -- 4. Clean up redundant mutable columns on invoices
+    -- 4. PRESERVE & RECONCILE EXISTING INVOICE PAYMENT DATA BEFORE DROPPING COLUMNS
+    -- If amount_paid exists and has values > 0, migrate them into payments and payment_allocations
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'invoices' AND column_name = 'amount_paid') THEN
+        FOR v_inv IN 
+            SELECT id, invoice_number, customer_id, invoice_date, amount_paid, approved_by 
+            FROM invoices 
+            WHERE COALESCE(amount_paid, 0.00) > 0.00
+        LOOP
+            -- Check if this invoice already has payment allocations
+            IF NOT EXISTS (SELECT 1 FROM payment_allocations WHERE invoice_id = v_inv.id) THEN
+                v_new_payment_id := gen_random_uuid();
+                
+                -- Create historical payment record
+                INSERT INTO payments (
+                    id, receipt_number, customer_id, payment_date, total_amount, payment_mode, notes, recorded_by
+                ) VALUES (
+                    v_new_payment_id,
+                    'MIGRATED-REC-' || v_inv.invoice_number,
+                    v_inv.customer_id,
+                    v_inv.invoice_date,
+                    v_inv.amount_paid,
+                    'other',
+                    'Automatically migrated from legacy invoice.amount_paid during v1.0 to v2.0 schema upgrade',
+                    v_inv.approved_by
+                ) ON CONFLICT (receipt_number) DO NOTHING;
+
+                -- Create allocation record
+                INSERT INTO payment_allocations (
+                    payment_id, invoice_id, allocated_amount, allocated_by
+                ) VALUES (
+                    v_new_payment_id,
+                    v_inv.id,
+                    v_inv.amount_paid,
+                    v_inv.approved_by
+                ) ON CONFLICT (payment_id, invoice_id) DO NOTHING;
+            END IF;
+        END LOOP;
+
+        -- Safe to drop obsolete columns now that payment history is preserved
         ALTER TABLE invoices DROP COLUMN amount_paid;
     END IF;
 

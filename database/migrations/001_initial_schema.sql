@@ -158,14 +158,22 @@ CREATE TABLE IF NOT EXISTS purchase_bill_items (
     item_id UUID NOT NULL REFERENCES items(id) ON DELETE RESTRICT,
     supplier_batch_no VARCHAR(50),
     expiry_date DATE,
-    quantity NUMERIC(14, 4) NOT NULL,
+    quantity NUMERIC(14, 4) NOT NULL, -- Quantity in transaction UOM (e.g. 1 bag)
     uom_id VARCHAR(10) NOT NULL REFERENCES units_of_measure(id),
-    base_quantity NUMERIC(14, 4) NOT NULL,
-    unit_rate NUMERIC(12, 2) NOT NULL,
-    taxable_amount NUMERIC(12, 2) NOT NULL,
+    base_quantity NUMERIC(14, 4) NOT NULL, -- Normalized quantity in base UOM (e.g. 50 kg)
+    unit_rate NUMERIC(12, 2) NOT NULL, -- Rate per transaction UOM (e.g. ₹2,250.00/bag)
+    taxable_amount NUMERIC(12, 2) NOT NULL, -- quantity * unit_rate
     gst_rate_pct NUMERIC(5, 2) NOT NULL,
     tax_amount NUMERIC(12, 2) NOT NULL,
-    total_amount NUMERIC(12, 2) NOT NULL
+    total_amount NUMERIC(12, 2) NOT NULL,
+    -- Derived effective cost rate per base UOM for inventory valuation (e.g. ₹45.00/kg)
+    base_unit_rate NUMERIC(12, 4) GENERATED ALWAYS AS (
+        CASE WHEN base_quantity > 0 THEN ROUND(taxable_amount / base_quantity, 4) ELSE 0.0000 END
+    ) STORED,
+    CONSTRAINT chk_purchase_item_math CHECK (
+        taxable_amount = ROUND(quantity * unit_rate, 2) 
+        AND total_amount = ROUND(taxable_amount + tax_amount, 2)
+    )
 );
 
 -- ----------------------------------------------------------------------------

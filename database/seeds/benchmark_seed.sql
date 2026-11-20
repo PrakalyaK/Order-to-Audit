@@ -7,6 +7,19 @@
 BEGIN;
 
 -- ----------------------------------------------------------------------------
+-- 0. IDEMPOTENT EXECUTION GUARD
+-- Explicitly prevents rerunning the benchmark seed on an already-populated database,
+-- which would corrupt the stock balances, moving WAC, and ledger integrity.
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM purchase_bills WHERE id = 'pb000001-0000-0000-0000-000000000001') 
+       OR EXISTS (SELECT 1 FROM production_runs WHERE id = 'pr000001-0000-0000-0000-000000000001') THEN
+        RAISE EXCEPTION 'Benchmark Seed Safety Violation: The benchmark scenario has already been seeded in this database. Rerunning this seed without resetting would corrupt the stock ledger and moving WAC. To perform a clean test run, execute database/scripts/dev_reset.sql first.';
+    END IF;
+END $$;
+
+-- ----------------------------------------------------------------------------
 -- 1. USERS & ROLES
 -- ----------------------------------------------------------------------------
 INSERT INTO users (id, username, password_hash, full_name, phone, role) VALUES
@@ -28,7 +41,8 @@ INSERT INTO units_of_measure (id, name, dimension, base_unit_id, conversion_fact
 ('ML', 'Millilitre', 'volume', 'L', 0.001000),
 ('PCS', 'Piece', 'count', NULL, 1.000000),
 ('PKT', 'Packet', 'count', NULL, 1.000000),
-('CTN', 'Carton', 'packaging', NULL, 1.000000)
+('CTN', 'Carton', 'packaging', NULL, 1.000000),
+('BAG', '50kg Bag', 'weight', 'KG', 50.000000)
 ON CONFLICT (id) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
@@ -79,10 +93,7 @@ INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, 
 ('dddddddd-dddd-dddd-dddd-dddddddddddd', 500.0000, 2.5000, 1250.00),
 ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 30.0000, 15.0000, 450.00),
 ('ffffffff-ffff-ffff-ffff-ffffffffffff', 50.0000, 30.0000, 1500.00)
-ON CONFLICT (item_id) DO UPDATE SET
-    current_base_qty = EXCLUDED.current_base_qty,
-    current_moving_wac = EXCLUDED.current_moving_wac,
-    current_total_value = EXCLUDED.current_total_value;
+ON CONFLICT (item_id) DO NOTHING;
 
 INSERT INTO inventory_ledger (
     transaction_timestamp, item_id, batch_number, movement_type, 

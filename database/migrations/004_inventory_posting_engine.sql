@@ -99,6 +99,8 @@ DECLARE
     v_item RECORD;
     v_stock RECORD;
     v_computed_base_qty NUMERIC(14, 4);
+    v_receipt_cost NUMERIC(12, 2);
+    v_effective_base_rate NUMERIC(12, 4);
     v_new_qty NUMERIC(14, 4);
     v_new_val NUMERIC(14, 2);
     v_new_wac NUMERIC(12, 4);
@@ -129,6 +131,16 @@ BEGIN
                 v_item.id, v_item.base_quantity, v_computed_base_qty;
         END IF;
 
+        -- Validate taxable amount consistency with entered quantity and unit_rate
+        IF v_item.taxable_amount <> ROUND(v_item.quantity * v_item.unit_rate, 2) THEN
+            RAISE EXCEPTION 'Math Error: Purchase item % taxable_amount (%) != quantity (%) * unit_rate (%)',
+                v_item.id, v_item.taxable_amount, v_item.quantity, v_item.unit_rate;
+        END IF;
+
+        -- Cost added to inventory is taxable_amount (GST is an input credit, not capitalized into inventory)
+        v_receipt_cost := v_item.taxable_amount;
+        v_effective_base_rate := ROUND(v_receipt_cost / v_computed_base_qty, 4);
+
         -- Update purchase_bill_item with validated base quantity
         UPDATE purchase_bill_items 
         SET base_quantity = v_computed_base_qty 
@@ -152,12 +164,12 @@ BEGIN
 
         -- Moving WAC formula on receipt: (Current Value + Receipt Value) / (Current Qty + Receipt Qty)
         v_new_qty := v_stock.current_base_qty + v_computed_base_qty;
-        v_new_val := ROUND(v_stock.current_total_value + (v_computed_base_qty * v_item.unit_rate), 2);
+        v_new_val := ROUND(v_stock.current_total_value + v_receipt_cost, 2);
         
         IF v_new_qty > 0 THEN
             v_new_wac := ROUND(v_new_val / v_new_qty, 4);
         ELSE
-            v_new_wac := v_item.unit_rate;
+            v_new_wac := v_effective_base_rate;
         END IF;
 
         UPDATE item_stock_balances 
@@ -192,8 +204,8 @@ BEGIN
             v_item.quantity,
             v_item.uom_id,
             v_computed_base_qty,
-            v_item.unit_rate,
-            ROUND(v_computed_base_qty * v_item.unit_rate, 2),
+            v_effective_base_rate,
+            v_receipt_cost,
             v_item.id,
             v_bill.bill_number,
             p_user_id

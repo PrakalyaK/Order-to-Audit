@@ -165,28 +165,28 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Attach audit triggers
+-- Attach audit triggers (capturing INSERT, UPDATE, and DELETE)
 DROP TRIGGER IF EXISTS trg_audit_invoices ON invoices;
 CREATE TRIGGER trg_audit_invoices
-AFTER UPDATE OR DELETE ON invoices
+AFTER INSERT OR UPDATE OR DELETE ON invoices
 FOR EACH ROW
 EXECUTE FUNCTION fn_log_entity_audit_trail();
 
 DROP TRIGGER IF EXISTS trg_audit_production_runs ON production_runs;
 CREATE TRIGGER trg_audit_production_runs
-AFTER UPDATE OR DELETE ON production_runs
+AFTER INSERT OR UPDATE OR DELETE ON production_runs
 FOR EACH ROW
 EXECUTE FUNCTION fn_log_entity_audit_trail();
 
 DROP TRIGGER IF EXISTS trg_audit_purchase_bills ON purchase_bills;
 CREATE TRIGGER trg_audit_purchase_bills
-AFTER UPDATE OR DELETE ON purchase_bills
+AFTER INSERT OR UPDATE OR DELETE ON purchase_bills
 FOR EACH ROW
 EXECUTE FUNCTION fn_log_entity_audit_trail();
 
 DROP TRIGGER IF EXISTS trg_audit_payments ON payments;
 CREATE TRIGGER trg_audit_payments
-AFTER UPDATE OR DELETE ON payments
+AFTER INSERT OR UPDATE OR DELETE ON payments
 FOR EACH ROW
 EXECUTE FUNCTION fn_log_entity_audit_trail();
 
