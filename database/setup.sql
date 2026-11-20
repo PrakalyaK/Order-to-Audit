@@ -1,6 +1,18 @@
 -- ============================================================================
 -- ORDER-TO-AUDIT SYSTEM: MASTER DATABASE SETUP SCRIPT
--- Executes all migrations and populates the NIT Trichy benchmark scenario
+-- ============================================================================
+-- EXECUTION INSTRUCTIONS:
+--
+-- Path A (Fresh Database Setup - Recommended):
+--   1. Create an empty PostgreSQL database (e.g., `createdb order_to_audit`)
+--   2. Run this script directly:
+--      psql -U <username> -d order_to_audit -f database/setup.sql
+--   (For local development reset: run database/scripts/dev_reset.sql first)
+--
+-- Path B (Upgrading Existing Database from previous schema drafts):
+--   1. Run explicit upgrade migration first:
+--      psql -U <username> -d order_to_audit -f database/migrations/000_upgrade_existing_schema.sql
+--   2. Run migrations 002 through 005.
 -- ============================================================================
 
 \echo '>>> Applying Migration 001: Initial Non-Destructive Schema...'
@@ -24,4 +36,4 @@
 \echo '>>> Executing Verification Queries for All Benchmark Rules...'
 \i database/seeds/verify_benchmark.sql
 
-\echo '>>> Database scripts ready for execution.'
+\echo '>>> Master setup script execution finished.'

@@ -436,8 +436,25 @@ CREATE TABLE IF NOT EXISTS item_stock_balances (
     CONSTRAINT chk_non_negative_inventory CHECK (current_base_qty >= 0.0000)
 );
 
+-- Auto-initialize item_stock_balances row whenever a new item is created
+CREATE OR REPLACE FUNCTION fn_trg_init_item_stock_balance()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, current_total_value)
+    VALUES (NEW.id, 0.0000, NEW.standard_purchase_rate, 0.00)
+    ON CONFLICT (item_id) DO NOTHING;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_init_item_stock_balance ON items;
+CREATE TRIGGER trg_init_item_stock_balance
+AFTER INSERT ON items
+FOR EACH ROW
+EXECUTE FUNCTION fn_trg_init_item_stock_balance();
+
 -- ----------------------------------------------------------------------------
--- 16. THE IMMUTABLE INVENTORY LEDGER (Append-Only with Referential Integrity)
+-- 16. THE IMMUTABLE INVENTORY LEDGER (Append-Only with Strict Source Integrity)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS inventory_ledger (
     id BIGSERIAL PRIMARY KEY,
@@ -468,9 +485,18 @@ CREATE TABLE IF NOT EXISTS inventory_ledger (
     source_reference_label VARCHAR(60) NOT NULL,
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Enforce exact 1-to-1 matching between movement_type and corresponding source document
     CONSTRAINT chk_source_integrity CHECK (
-        (movement_type = 'OPENING_BALANCE' AND num_nonnulls(purchase_bill_item_id, production_run_input_id, production_run_yield_id, dispatch_item_id, stock_adjustment_id) = 0)
+        (movement_type = 'OPENING_BALANCE' AND purchase_bill_item_id IS NULL AND production_run_input_id IS NULL AND production_run_yield_id IS NULL AND dispatch_item_id IS NULL AND stock_adjustment_id IS NULL)
         OR
-        (movement_type != 'OPENING_BALANCE' AND num_nonnulls(purchase_bill_item_id, production_run_input_id, production_run_yield_id, dispatch_item_id, stock_adjustment_id) = 1)
+        (movement_type = 'PURCHASE_RECEIPT' AND purchase_bill_item_id IS NOT NULL AND production_run_input_id IS NULL AND production_run_yield_id IS NULL AND dispatch_item_id IS NULL AND stock_adjustment_id IS NULL)
+        OR
+        (movement_type = 'PRODUCTION_ISSUE' AND production_run_input_id IS NOT NULL AND purchase_bill_item_id IS NULL AND production_run_yield_id IS NULL AND dispatch_item_id IS NULL AND stock_adjustment_id IS NULL)
+        OR
+        (movement_type = 'PRODUCTION_YIELD' AND production_run_yield_id IS NOT NULL AND purchase_bill_item_id IS NULL AND production_run_input_id IS NULL AND dispatch_item_id IS NULL AND stock_adjustment_id IS NULL)
+        OR
+        (movement_type = 'SALES_DISPATCH' AND dispatch_item_id IS NOT NULL AND purchase_bill_item_id IS NULL AND production_run_input_id IS NULL AND production_run_yield_id IS NULL AND stock_adjustment_id IS NULL)
+        OR
+        (movement_type = 'STOCK_ADJUSTMENT' AND stock_adjustment_id IS NOT NULL AND purchase_bill_item_id IS NULL AND production_run_input_id IS NULL AND production_run_yield_id IS NULL AND dispatch_item_id IS NULL)
     )
 );

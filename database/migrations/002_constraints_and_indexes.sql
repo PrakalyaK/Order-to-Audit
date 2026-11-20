@@ -59,7 +59,8 @@ ON boms (finished_good_item_id)
 WHERE is_active = true;
 
 -- ----------------------------------------------------------------------------
--- 3. INVENTORY LEDGER & STOCK BALANCE OPTIMIZATION INDEXES
+-- 3. INVENTORY LEDGER SOURCE INTEGRITY & UNIQUE POSTING INDEXES
+-- Enforces that a source document line item can NEVER be posted more than once
 -- ----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_ledger_item_timestamp 
 ON inventory_ledger (item_id, transaction_timestamp DESC);
@@ -68,23 +69,23 @@ CREATE INDEX IF NOT EXISTS idx_ledger_item_batch
 ON inventory_ledger (item_id, batch_number) 
 WHERE batch_number IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_ledger_purchase_item_fk 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_purchase_item 
 ON inventory_ledger (purchase_bill_item_id) 
 WHERE purchase_bill_item_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_ledger_prod_input_fk 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_prod_input 
 ON inventory_ledger (production_run_input_id) 
 WHERE production_run_input_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_ledger_prod_yield_fk 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_prod_yield 
 ON inventory_ledger (production_run_yield_id) 
 WHERE production_run_yield_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_ledger_dispatch_item_fk 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_dispatch_item 
 ON inventory_ledger (dispatch_item_id) 
 WHERE dispatch_item_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_ledger_stock_adj_fk 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_stock_adj 
 ON inventory_ledger (stock_adjustment_id) 
 WHERE stock_adjustment_id IS NOT NULL;
 

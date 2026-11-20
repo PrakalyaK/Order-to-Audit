@@ -1,6 +1,10 @@
 -- ============================================================================
 -- ORDER-TO-AUDIT SYSTEM: DATABASE MIGRATION 004
 -- Transactional Inventory Posting Engine & Moving WAC Management
+-- Incorporates:
+--   1. Strict Base UOM Validation & Product-Specific Carton Conversion
+--   2. Parent Row Locking for Missing Stock Balance Concurrency Protection
+--   3. Absolute Source Integrity & Unique Single-Posting Enforcers
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -17,7 +21,12 @@ DECLARE
     v_packets_per_carton NUMERIC(10, 2);
     v_conv_factor NUMERIC(14, 6);
     v_uom_base VARCHAR(10);
+    v_target_base VARCHAR(10);
 BEGIN
+    IF p_quantity IS NULL THEN
+        RAISE EXCEPTION 'UOM Conversion Error: Quantity cannot be null.';
+    END IF;
+
     SELECT base_uom_id, packets_per_carton 
     INTO v_base_uom, v_packets_per_carton 
     FROM items 
@@ -27,32 +36,58 @@ BEGIN
         RAISE EXCEPTION 'Item with ID % not found.', p_item_id;
     END IF;
 
-    -- Identity conversion
+    -- Identity conversion (already in base UOM)
     IF p_uom_id = v_base_uom THEN
         RETURN ROUND(p_quantity, 4);
     END IF;
 
     -- Product-specific carton to packet conversion
     IF p_uom_id = 'CTN' AND v_base_uom = 'PKT' THEN
+        IF v_packets_per_carton IS NULL OR v_packets_per_carton <= 0 THEN
+            RAISE EXCEPTION 'Configuration Error: Item % has invalid packets_per_carton (%)', p_item_id, v_packets_per_carton;
+        END IF;
         RETURN ROUND(p_quantity * v_packets_per_carton, 4);
     END IF;
 
-    -- Standard unit conversion table lookup
+    -- Product-specific packet to carton conversion (if base unit is CTN)
+    IF p_uom_id = 'PKT' AND v_base_uom = 'CTN' THEN
+        IF v_packets_per_carton IS NULL OR v_packets_per_carton <= 0 THEN
+            RAISE EXCEPTION 'Configuration Error: Item % has invalid packets_per_carton (%)', p_item_id, v_packets_per_carton;
+        END IF;
+        RETURN ROUND(p_quantity / v_packets_per_carton, 4);
+    END IF;
+
+    -- Standard conversion table lookup (from p_uom_id -> base_unit)
     SELECT conversion_factor_to_base, base_unit_id
     INTO v_conv_factor, v_uom_base
     FROM units_of_measure
     WHERE id = p_uom_id;
 
-    IF NOT FOUND OR v_uom_base <> v_base_uom THEN
-        RAISE EXCEPTION 'Incompatible UOM conversion: cannot convert % to item base unit %', p_uom_id, v_base_uom;
+    IF FOUND AND v_uom_base = v_base_uom THEN
+        RETURN ROUND(p_quantity * v_conv_factor, 4);
     END IF;
 
-    RETURN ROUND(p_quantity * v_conv_factor, 4);
+    -- Standard conversion table reverse lookup (from base_unit -> p_uom_id)
+    SELECT conversion_factor_to_base, base_unit_id
+    INTO v_conv_factor, v_target_base
+    FROM units_of_measure
+    WHERE id = v_base_uom;
+
+    IF FOUND AND v_target_base = p_uom_id THEN
+        IF v_conv_factor = 0 THEN
+            RAISE EXCEPTION 'Division by zero in UOM conversion factor for %', v_base_uom;
+        END IF;
+        RETURN ROUND(p_quantity / v_conv_factor, 4);
+    END IF;
+
+    RAISE EXCEPTION 'Incompatible UOM conversion: cannot convert % to item base unit % for item %',
+        p_uom_id, v_base_uom, p_item_id;
 END;
 $$ LANGUAGE plpgsql;
 
 -- ----------------------------------------------------------------------------
--- 2. ATOMIC PURCHASE RECEIPT POSTING (Moving WAC Recalculation)
+-- 2. ATOMIC PURCHASE RECEIPT POSTING
+-- Safe First-Time Concurrency via Parent Item Row Lock + UOM Validation
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_post_purchase_receipt(
     p_purchase_bill_id UUID,
@@ -63,6 +98,7 @@ DECLARE
     v_bill RECORD;
     v_item RECORD;
     v_stock RECORD;
+    v_computed_base_qty NUMERIC(14, 4);
     v_new_qty NUMERIC(14, 4);
     v_new_val NUMERIC(14, 2);
     v_new_wac NUMERIC(12, 4);
@@ -85,39 +121,54 @@ BEGIN
     FOR v_item IN 
         SELECT * FROM purchase_bill_items WHERE purchase_bill_id = p_purchase_bill_id
     LOOP
-        -- Acquire row lock on stock balance
+        -- Enforce base UOM conversion inside the database
+        v_computed_base_qty := fn_compute_base_quantity(v_item.item_id, v_item.quantity, v_item.uom_id);
+
+        IF v_item.base_quantity IS NOT NULL AND ROUND(v_item.base_quantity, 4) <> v_computed_base_qty THEN
+            RAISE EXCEPTION 'UOM Conversion Error: Purchase item % base quantity mismatch. Declared: %, Computed: %',
+                v_item.id, v_item.base_quantity, v_computed_base_qty;
+        END IF;
+
+        -- Update purchase_bill_item with validated base quantity
+        UPDATE purchase_bill_items 
+        SET base_quantity = v_computed_base_qty 
+        WHERE id = v_item.id;
+
+        -- CONCURRENCY SAFEGUARD:
+        -- Lock parent item record first. Because the item ALWAYS exists in items table,
+        -- this guarantees strict serialization across concurrent first-time receipts!
+        PERFORM 1 FROM items WHERE id = v_item.item_id FOR UPDATE;
+
+        -- Safely initialize row if missing
+        INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, current_total_value)
+        VALUES (v_item.item_id, 0.0000, 0.0000, 0.00)
+        ON CONFLICT (item_id) DO NOTHING;
+
+        -- Now safely lock the guaranteed-to-exist stock balance row
         SELECT * INTO v_stock 
         FROM item_stock_balances 
         WHERE item_id = v_item.item_id 
         FOR UPDATE;
 
-        IF NOT FOUND THEN
-            -- First time stock initialization for this item
-            v_new_qty := v_item.base_quantity;
-            v_new_wac := v_item.unit_rate;
-            v_new_val := ROUND(v_new_qty * v_new_wac, 2);
-            INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, current_total_value)
-            VALUES (v_item.item_id, v_new_qty, v_new_wac, v_new_val);
+        -- Moving WAC formula on receipt: (Current Value + Receipt Value) / (Current Qty + Receipt Qty)
+        v_new_qty := v_stock.current_base_qty + v_computed_base_qty;
+        v_new_val := ROUND(v_stock.current_total_value + (v_computed_base_qty * v_item.unit_rate), 2);
+        
+        IF v_new_qty > 0 THEN
+            v_new_wac := ROUND(v_new_val / v_new_qty, 4);
         ELSE
-            -- Moving WAC formula on receipt: (Old Value + New Receipt Value) / (Old Qty + New Qty)
-            v_new_qty := v_stock.current_base_qty + v_item.base_quantity;
-            v_new_val := ROUND(v_stock.current_total_value + (v_item.base_quantity * v_item.unit_rate), 2);
-            IF v_new_qty > 0 THEN
-                v_new_wac := ROUND(v_new_val / v_new_qty, 4);
-            ELSE
-                v_new_wac := v_item.unit_rate;
-            END IF;
-
-            UPDATE item_stock_balances 
-            SET current_base_qty = v_new_qty,
-                current_moving_wac = v_new_wac,
-                current_total_value = v_new_val,
-                last_transaction_timestamp = NOW(),
-                updated_at = NOW()
-            WHERE item_id = v_item.item_id;
+            v_new_wac := v_item.unit_rate;
         END IF;
 
-        -- Record immutable inventory ledger entry
+        UPDATE item_stock_balances 
+        SET current_base_qty = v_new_qty,
+            current_moving_wac = v_new_wac,
+            current_total_value = v_new_val,
+            last_transaction_timestamp = NOW(),
+            updated_at = NOW()
+        WHERE item_id = v_item.item_id;
+
+        -- Record immutable inventory ledger entry (Enforced by partial unique index uq_ledger_purchase_item)
         INSERT INTO inventory_ledger (
             transaction_timestamp,
             item_id,
@@ -140,9 +191,9 @@ BEGIN
             'PURCHASE_RECEIPT',
             v_item.quantity,
             v_item.uom_id,
-            v_item.base_quantity,
+            v_computed_base_qty,
             v_item.unit_rate,
-            ROUND(v_item.base_quantity * v_item.unit_rate, 2),
+            ROUND(v_computed_base_qty * v_item.unit_rate, 2),
             v_item.id,
             v_bill.bill_number,
             p_user_id
@@ -157,7 +208,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ----------------------------------------------------------------------------
--- 3. ATOMIC PRODUCTION ISSUE POSTING (Negative Inventory Prevention)
+-- 3. ATOMIC PRODUCTION ISSUE POSTING
+-- Unit Conversion Enforcement + Negative Stock Prevention
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_post_production_issue(
     p_production_run_id UUID,
@@ -169,6 +221,10 @@ DECLARE
     v_input RECORD;
     v_stock RECORD;
     v_item_name VARCHAR(150);
+    v_computed_issued NUMERIC(14, 4);
+    v_computed_returned NUMERIC(14, 4);
+    v_computed_good NUMERIC(14, 4);
+    v_computed_scrap NUMERIC(14, 4);
     v_net_consumed NUMERIC(14, 4);
     v_issue_cost NUMERIC(12, 2);
 BEGIN
@@ -190,27 +246,50 @@ BEGIN
     LOOP
         SELECT name INTO v_item_name FROM items WHERE id = v_input.item_id;
 
-        -- Acquire row lock on stock balance
+        -- Validate mass balance in entered units
+        IF ROUND(v_input.actual_issued_qty, 4) <> ROUND(v_input.good_production_qty + v_input.damaged_or_scrap_qty + v_input.returned_to_store_qty, 4) THEN
+            RAISE EXCEPTION 'Mass Balance Error for item "%": Issued (%) != Good (%) + Scrap (%) + Returned (%)',
+                v_item_name, v_input.actual_issued_qty, v_input.good_production_qty, v_input.damaged_or_scrap_qty, v_input.returned_to_store_qty;
+        END IF;
+
+        -- Enforce base UOM conversion inside database
+        v_computed_issued := fn_compute_base_quantity(v_input.item_id, v_input.actual_issued_qty, v_input.uom_id);
+        v_computed_returned := fn_compute_base_quantity(v_input.item_id, v_input.returned_to_store_qty, v_input.uom_id);
+        v_net_consumed := v_computed_issued - v_computed_returned;
+
+        IF v_input.base_net_consumed_qty IS NOT NULL AND ROUND(v_input.base_net_consumed_qty, 4) <> v_net_consumed THEN
+            RAISE EXCEPTION 'UOM Conversion Error: Production input % base net quantity mismatch. Declared: %, Computed: %',
+                v_input.id, v_input.base_net_consumed_qty, v_net_consumed;
+        END IF;
+
+        -- Update input row with validated base net consumed
+        UPDATE production_run_inputs 
+        SET base_net_consumed_qty = v_net_consumed 
+        WHERE id = v_input.id;
+
+        -- CONCURRENCY SAFEGUARD:
+        -- Lock parent item record first, then lock stock balance row
+        PERFORM 1 FROM items WHERE id = v_input.item_id FOR UPDATE;
+
         SELECT * INTO v_stock 
         FROM item_stock_balances 
         WHERE item_id = v_input.item_id 
         FOR UPDATE;
 
-        IF NOT FOUND OR v_stock.current_base_qty < v_input.base_net_consumed_qty THEN
+        IF NOT FOUND OR v_stock.current_base_qty < v_net_consumed THEN
             RAISE EXCEPTION 'Negative Inventory Prevention: Insufficient stock for "%". Required: %, Available: %',
-                v_item_name, v_input.base_net_consumed_qty, COALESCE(v_stock.current_base_qty, 0);
+                v_item_name, v_net_consumed, COALESCE(v_stock.current_base_qty, 0);
         END IF;
 
-        v_net_consumed := v_input.base_net_consumed_qty;
         v_issue_cost := ROUND(v_net_consumed * v_stock.current_moving_wac, 2);
 
-        -- Update production input line with the pinned WAC rate
+        -- Update production input line with the pinned Moving WAC
         UPDATE production_run_inputs 
         SET unit_cost_applied = v_stock.current_moving_wac,
             total_material_cost = v_issue_cost
         WHERE id = v_input.id;
 
-        -- Decrement stock in item_stock_balances (WAC remains unchanged upon issue)
+        -- Decrement stock in item_stock_balances (Moving WAC unit rate remains unchanged upon issue)
         UPDATE item_stock_balances 
         SET current_base_qty = current_base_qty - v_net_consumed,
             current_total_value = ROUND((current_base_qty - v_net_consumed) * current_moving_wac, 2),
@@ -218,7 +297,7 @@ BEGIN
             updated_at = NOW()
         WHERE item_id = v_input.item_id;
 
-        -- Record immutable inventory ledger entry (Single net deduction - No double counting)
+        -- Record immutable inventory ledger entry (Enforced by partial unique index uq_ledger_prod_input)
         INSERT INTO inventory_ledger (
             transaction_timestamp,
             item_id,
@@ -254,6 +333,7 @@ $$ LANGUAGE plpgsql;
 
 -- ----------------------------------------------------------------------------
 -- 4. ATOMIC PRODUCTION YIELD & FINISHED GOODS MOVING WAC POSTING
+-- Safe First-Time Concurrency for Finished Goods Stock
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_post_production_yield(
     p_production_run_id UUID,
@@ -348,34 +428,38 @@ BEGIN
         unit_gross_margin = EXCLUDED.unit_gross_margin,
         gross_margin_pct = EXCLUDED.gross_margin_pct;
 
-    -- Lock finished goods stock balance and recalculate Finished Goods Moving WAC
+    -- CONCURRENCY SAFEGUARD:
+    -- Lock parent item record first for the finished good item
+    PERFORM 1 FROM items WHERE id = v_run.finished_good_item_id FOR UPDATE;
+
+    INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, current_total_value)
+    VALUES (v_run.finished_good_item_id, 0.0000, 0.0000, 0.00)
+    ON CONFLICT (item_id) DO NOTHING;
+
     SELECT * INTO v_stock 
     FROM item_stock_balances 
     WHERE item_id = v_run.finished_good_item_id 
     FOR UPDATE;
 
-    IF NOT FOUND THEN
-        v_new_fg_qty := v_run.actual_good_output_qty;
-        v_new_fg_wac := v_cost_per_pkt;
-        v_new_fg_val := v_total_batch_cost;
-        INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, current_total_value)
-        VALUES (v_run.finished_good_item_id, v_new_fg_qty, v_new_fg_wac, v_new_fg_val);
-    ELSE
-        -- Moving WAC across opening finished goods stock and newly produced batch
-        v_new_fg_qty := v_stock.current_base_qty + v_run.actual_good_output_qty;
-        v_new_fg_val := ROUND(v_stock.current_total_value + v_total_batch_cost, 2);
+    -- Moving WAC across opening finished goods stock and newly produced batch
+    v_new_fg_qty := v_stock.current_base_qty + v_run.actual_good_output_qty;
+    v_new_fg_val := ROUND(v_stock.current_total_value + v_total_batch_cost, 2);
+    
+    IF v_new_fg_qty > 0 THEN
         v_new_fg_wac := ROUND(v_new_fg_val / v_new_fg_qty, 4);
-
-        UPDATE item_stock_balances 
-        SET current_base_qty = v_new_fg_qty,
-            current_moving_wac = v_new_fg_wac,
-            current_total_value = v_new_fg_val,
-            last_transaction_timestamp = NOW(),
-            updated_at = NOW()
-        WHERE item_id = v_run.finished_good_item_id;
+    ELSE
+        v_new_fg_wac := v_cost_per_pkt;
     END IF;
 
-    -- Record finished goods receipt in inventory ledger
+    UPDATE item_stock_balances 
+    SET current_base_qty = v_new_fg_qty,
+        current_moving_wac = v_new_fg_wac,
+        current_total_value = v_new_fg_val,
+        last_transaction_timestamp = NOW(),
+        updated_at = NOW()
+    WHERE item_id = v_run.finished_good_item_id;
+
+    -- Record finished goods receipt in inventory ledger (Enforced by partial unique index uq_ledger_prod_yield)
     INSERT INTO inventory_ledger (
         transaction_timestamp,
         item_id,
@@ -411,7 +495,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ----------------------------------------------------------------------------
--- 5. ATOMIC SALES DISPATCH POSTING (Finished Goods Deduction at Moving WAC)
+-- 5. ATOMIC SALES DISPATCH POSTING
+-- Unit Conversion Enforcement + Finished Goods Deduction at Moving WAC
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_post_sales_dispatch(
     p_dispatch_id UUID,
@@ -423,6 +508,7 @@ DECLARE
     v_item RECORD;
     v_stock RECORD;
     v_item_name VARCHAR(150);
+    v_computed_base_qty NUMERIC(14, 4);
     v_cost_amount NUMERIC(12, 2);
 BEGIN
     SELECT * INTO v_dispatch 
@@ -444,28 +530,43 @@ BEGIN
     LOOP
         SELECT name INTO v_item_name FROM items WHERE id = v_item.item_id;
 
-        -- Lock finished goods balance row
+        -- Enforce base UOM conversion inside database
+        v_computed_base_qty := fn_compute_base_quantity(v_item.item_id, v_item.dispatched_qty, v_item.uom_id);
+
+        IF v_item.base_quantity IS NOT NULL AND ROUND(v_item.base_quantity, 4) <> v_computed_base_qty THEN
+            RAISE EXCEPTION 'UOM Conversion Error: Dispatch item % base quantity mismatch. Declared: %, Computed: %',
+                v_item.id, v_item.base_quantity, v_computed_base_qty;
+        END IF;
+
+        UPDATE dispatch_items 
+        SET base_quantity = v_computed_base_qty 
+        WHERE id = v_item.id;
+
+        -- CONCURRENCY SAFEGUARD:
+        -- Lock parent item record first, then lock stock balance row
+        PERFORM 1 FROM items WHERE id = v_item.item_id FOR UPDATE;
+
         SELECT * INTO v_stock 
         FROM item_stock_balances 
         WHERE item_id = v_item.item_id 
         FOR UPDATE;
 
-        IF NOT FOUND OR v_stock.current_base_qty < v_item.base_quantity THEN
+        IF NOT FOUND OR v_stock.current_base_qty < v_computed_base_qty THEN
             RAISE EXCEPTION 'Negative Inventory Prevention: Insufficient finished stock for "%". Required: %, Available: %',
-                v_item_name, v_item.base_quantity, COALESCE(v_stock.current_base_qty, 0);
+                v_item_name, v_computed_base_qty, COALESCE(v_stock.current_base_qty, 0);
         END IF;
 
-        v_cost_amount := ROUND(v_item.base_quantity * v_stock.current_moving_wac, 2);
+        v_cost_amount := ROUND(v_computed_base_qty * v_stock.current_moving_wac, 2);
 
         -- Deduct from item_stock_balances (Moving WAC unit rate remains unchanged)
         UPDATE item_stock_balances 
-        SET current_base_qty = current_base_qty - v_item.base_quantity,
-            current_total_value = ROUND((current_base_qty - v_item.base_quantity) * current_moving_wac, 2),
+        SET current_base_qty = current_base_qty - v_computed_base_qty,
+            current_total_value = ROUND((current_base_qty - v_computed_base_qty) * current_moving_wac, 2),
             last_transaction_timestamp = NOW(),
             updated_at = NOW()
         WHERE item_id = v_item.item_id;
 
-        -- Record sales dispatch in inventory ledger
+        -- Record sales dispatch in inventory ledger (Enforced by partial unique index uq_ledger_dispatch_item)
         INSERT INTO inventory_ledger (
             transaction_timestamp,
             item_id,
@@ -486,7 +587,7 @@ BEGIN
             'SALES_DISPATCH',
             v_item.dispatched_qty,
             v_item.uom_id,
-            -v_item.base_quantity,
+            -v_computed_base_qty,
             v_stock.current_moving_wac,
             -v_cost_amount,
             v_item.id,
