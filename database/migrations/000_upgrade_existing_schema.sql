@@ -24,10 +24,20 @@ CREATE TABLE IF NOT EXISTS payment_allocations (
     CONSTRAINT uq_payment_invoice_alloc UNIQUE (payment_id, invoice_id)
 );
 
+-- Step B: Ensure payments.payment_mode CHECK constraint permits 'legacy_reconciliation'
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_payment_mode_check') THEN
+        ALTER TABLE payments DROP CONSTRAINT payments_payment_mode_check;
+    END IF;
+    ALTER TABLE payments ADD CONSTRAINT payments_payment_mode_check 
+        CHECK (payment_mode IN ('cash', 'upi', 'neft_rtgs', 'cheque', 'legacy_reconciliation'));
+END $$;
+
 DO $$ 
 DECLARE
     v_inv RECORD;
-    v_new_payment_id UUID;
+    v_actual_payment_id UUID;
 BEGIN
     -- 1. Upgrade items table with packets_per_carton
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'items' AND column_name = 'packets_per_carton') THEN
@@ -70,27 +80,37 @@ BEGIN
         LOOP
             -- Check if this invoice already has payment allocations
             IF NOT EXISTS (SELECT 1 FROM payment_allocations WHERE invoice_id = v_inv.id) THEN
-                v_new_payment_id := gen_random_uuid();
+                v_actual_payment_id := NULL;
                 
-                -- Create historical payment record
+                -- Create historical payment record or safely retrieve existing payment ID if receipt exists
                 INSERT INTO payments (
                     id, receipt_number, customer_id, payment_date, total_amount, payment_mode, notes, recorded_by
                 ) VALUES (
-                    v_new_payment_id,
+                    gen_random_uuid(),
                     'MIGRATED-REC-' || v_inv.invoice_number,
                     v_inv.customer_id,
                     v_inv.invoice_date,
                     v_inv.amount_paid,
-                    'other',
+                    'legacy_reconciliation',
                     'Automatically migrated from legacy invoice.amount_paid during v1.0 to v2.0 schema upgrade',
                     v_inv.approved_by
-                ) ON CONFLICT (receipt_number) DO NOTHING;
+                ) 
+                ON CONFLICT (receipt_number) DO UPDATE
+                    SET notes = EXCLUDED.notes
+                RETURNING id INTO v_actual_payment_id;
 
-                -- Create allocation record
+                -- Fallback lookup if ON CONFLICT did not return ID
+                IF v_actual_payment_id IS NULL THEN
+                    SELECT id INTO v_actual_payment_id 
+                    FROM payments 
+                    WHERE receipt_number = 'MIGRATED-REC-' || v_inv.invoice_number;
+                END IF;
+
+                -- Create allocation record using the confirmed, existing payment ID
                 INSERT INTO payment_allocations (
                     payment_id, invoice_id, allocated_amount, allocated_by
                 ) VALUES (
-                    v_new_payment_id,
+                    v_actual_payment_id,
                     v_inv.id,
                     v_inv.amount_paid,
                     v_inv.approved_by

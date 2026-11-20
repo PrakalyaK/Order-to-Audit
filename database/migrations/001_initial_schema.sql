@@ -376,7 +376,7 @@ CREATE TABLE IF NOT EXISTS payments (
     customer_id UUID NOT NULL REFERENCES parties(id) ON DELETE RESTRICT,
     payment_date DATE NOT NULL,
     total_amount NUMERIC(12, 2) NOT NULL CHECK (total_amount > 0),
-    payment_mode VARCHAR(20) NOT NULL CHECK (payment_mode IN ('cash', 'upi', 'neft_rtgs', 'cheque')),
+    payment_mode VARCHAR(30) NOT NULL CHECK (payment_mode IN ('cash', 'upi', 'neft_rtgs', 'cheque', 'legacy_reconciliation')),
     reference_txn_id VARCHAR(100),
     notes TEXT,
     recorded_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
