@@ -8,6 +8,13 @@ const __dirname = path.dirname(__filename);
 // Explicitly load .env from backend root directory
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || typeof jwtSecret !== 'string' || Buffer.byteLength(jwtSecret, 'utf8') < 32) {
+  throw new Error(
+    'Configuration error: JWT_SECRET must be configured in environment variables and must have sufficient cryptographic strength (at least 32 bytes).'
+  );
+}
+
 export const env = {
   port: parseInt(process.env.PORT, 10) || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -26,8 +33,9 @@ export const env = {
     connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT_MS, 10) || 5000,
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'order_to_audit_jwt_secret_key_2026_super_secure_phase2',
+    secret: jwtSecret,
     expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    algorithm: 'HS256',
   },
   bcrypt: {
     saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10,

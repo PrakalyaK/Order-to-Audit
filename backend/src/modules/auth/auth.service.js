@@ -34,7 +34,7 @@ export const authService = {
       throw ApiError.unauthorized('Invalid username or password');
     }
 
-    // Sign JWT with subject = user.id
+    // Sign JWT with subject = user.id and explicit HS256 algorithm
     const payload = {
       sub: user.id,
       username: user.username,
@@ -42,6 +42,7 @@ export const authService = {
     };
 
     const token = jwt.sign(payload, env.jwt.secret, {
+      algorithm: env.jwt.algorithm || 'HS256',
       expiresIn: env.jwt.expiresIn,
     });
 
@@ -65,6 +66,14 @@ export const authService = {
    * @returns {Promise<void>}
    */
   async changePassword(userId, currentPassword, newPassword) {
+    if (!newPassword || newPassword.length < 12) {
+      throw ApiError.badRequest('New password must be at least 12 characters long');
+    }
+
+    if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+      throw ApiError.badRequest('New password cannot exceed 72 bytes (bcrypt limitation)');
+    }
+
     const user = await authRepository.findWithHashById(userId);
     if (!user) {
       throw ApiError.notFound('User not found');
