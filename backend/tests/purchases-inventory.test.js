@@ -24,10 +24,28 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   const pouchItemId = 'dddddddd-dddd-dddd-dddd-dddddddddddd'; // PK-POUCH-200G
   const finishedGoodId = 'ffffffff-ffff-ffff-ffff-ffffffffffff'; // FG-MRK-200G
 
-  // Clean any test residue from previous runs
-  await query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
-  await query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id IN (SELECT id FROM purchase_bills WHERE bill_number LIKE 'TEST-%')`);
-  await query(`DELETE FROM purchase_bills WHERE bill_number LIKE 'TEST-%'`);
+  // Clean any test residue from previous runs safely
+  const preClient = await getClient();
+  try {
+    await preClient.query('SET session_replication_role = replica');
+    await preClient.query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
+    await preClient.query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id IN (SELECT id FROM purchase_bills WHERE bill_number LIKE 'TEST-%')`);
+    await preClient.query(`DELETE FROM purchase_bills WHERE bill_number LIKE 'TEST-%'`);
+    await preClient.query(`DELETE FROM audit_logs WHERE entity_name IN ('purchase_bills', 'purchase_bill_items') AND entity_id NOT IN ('ba000001-0000-0000-0000-000000000001')`);
+    await preClient.query(`
+      UPDATE item_stock_balances
+      SET current_base_qty = 160.0000, current_moving_wac = 43.1250, current_total_value = 6900.00
+      WHERE item_id = $1
+    `, [flourItemId]);
+    await preClient.query(`
+      UPDATE item_stock_balances
+      SET current_base_qty = 40.0000, current_moving_wac = 100.0000, current_total_value = 4000.00
+      WHERE item_id = $1
+    `, [oilItemId]);
+    await preClient.query('SET session_replication_role = origin');
+  } finally {
+    preClient.release();
+  }
 
   // Signed JWTs
   const ownerToken = jwt.sign({ sub: ownerId, username: 'owner_main', role: ROLES.OWNER }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
@@ -473,32 +491,39 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   // ==========================================================================
 
   await t.test('17. Teardown: Clean up test purchases and restore benchmark balances', async () => {
-    // Clean up ledger entries created by test
-    await query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
-    // Clean up test purchase bill items and bill
-    await query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id IN (SELECT id FROM purchase_bills WHERE bill_number LIKE 'TEST-%')`);
-    await query(`DELETE FROM purchase_bills WHERE bill_number LIKE 'TEST-%'`);
+    const postClient = await getClient();
+    try {
+      await postClient.query('SET session_replication_role = replica');
+      // Clean up ledger entries created by test
+      await postClient.query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
+      // Clean up test purchase bill items and bill
+      await postClient.query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id IN (SELECT id FROM purchase_bills WHERE bill_number LIKE 'TEST-%')`);
+      await postClient.query(`DELETE FROM purchase_bills WHERE bill_number LIKE 'TEST-%'`);
 
-    // Restore Flour and Oil stock balance to pristine benchmark state
-    // (Benchmark: Flour 160.0000 kg @ ₹43.1250, value ₹6,900.00; Oil 40.0000 L @ ₹100.0000, value ₹4,000.00)
-    await query(`
-      UPDATE item_stock_balances
-      SET current_base_qty = 160.0000, current_moving_wac = 43.1250, current_total_value = 6900.00
-      WHERE item_id = $1;
-    `, [flourItemId]);
+      // Restore Flour and Oil stock balance to pristine benchmark state
+      // (Benchmark: Flour 160.0000 kg @ ₹43.1250, value ₹6,900.00; Oil 40.0000 L @ ₹100.0000, value ₹4,000.00)
+      await postClient.query(`
+        UPDATE item_stock_balances
+        SET current_base_qty = 160.0000, current_moving_wac = 43.1250, current_total_value = 6900.00
+        WHERE item_id = $1;
+      `, [flourItemId]);
 
-    await query(`
-      UPDATE item_stock_balances
-      SET current_base_qty = 40.0000, current_moving_wac = 100.0000, current_total_value = 4000.00
-      WHERE item_id = $1;
-    `, [oilItemId]);
+      await postClient.query(`
+        UPDATE item_stock_balances
+        SET current_base_qty = 40.0000, current_moving_wac = 100.0000, current_total_value = 4000.00
+        WHERE item_id = $1;
+      `, [oilItemId]);
 
-    // Clean up audit logs from test bill
-    await query(`
-      DELETE FROM audit_logs 
-      WHERE entity_name IN ('purchase_bills', 'purchase_bill_items') 
-        AND entity_id NOT IN ('ba000001-0000-0000-0000-000000000001')
-    `);
+      // Clean up audit logs from test bill
+      await postClient.query(`
+        DELETE FROM audit_logs 
+        WHERE entity_name IN ('purchase_bills', 'purchase_bill_items') 
+          AND entity_id NOT IN ('ba000001-0000-0000-0000-000000000001')
+      `);
+      await postClient.query('SET session_replication_role = origin');
+    } finally {
+      postClient.release();
+    }
 
     // Verify benchmark counts are identical to start
     const finalCountsRes = await query(`
