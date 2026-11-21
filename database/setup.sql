@@ -34,6 +34,9 @@
 \echo '>>> Applying Migration 006: Production Hardening, Costing & Immutability...'
 \i database/migrations/006_production_hardening_and_immutability.sql
 
+\echo '>>> Applying Migration 007: Purchases Immutability & Inventory Hardening...'
+\i database/migrations/007_purchases_and_inventory_hardening.sql
+
 \echo '>>> Seeding Benchmark Scenario Data via Atomic Posting Functions...'
 \i database/seeds/benchmark_seed.sql
 
