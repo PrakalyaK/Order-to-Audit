@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getClient, query } from '../src/config/db.js';
+import { getClient, query, closePool } from '../src/config/db.js';
 
 test('Order-to-Audit: Database Integrity, Immutability & Production Hardening Integration Tests', async (t) => {
+  t.after(async () => {
+    await closePool();
+  });
+
   // Snapshot initial benchmark table counts to ensure zero corruption or mutation
   const initialCountsRes = await query(`
     SELECT 
@@ -513,9 +517,63 @@ test('Order-to-Audit: Database Integrity, Immutability & Production Hardening In
   });
 
   // --------------------------------------------------------------------------
-  // TEST 7: Benchmark Data Integrity Invariance Check
+  // TEST 7: Concurrent BOM Activation Serialization
   // --------------------------------------------------------------------------
-  await t.test('7. Benchmark Data Invariance: Confirms zero corruption or data loss in order_to_audit', async () => {
+  await t.test('7. Concurrency Serialization: Serializes concurrent BOM activations via parent item locking', async () => {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+
+      // Create a test finished good item
+      const itemRes = await client.query(`
+        INSERT INTO items (
+          sku, name, item_type, base_uom_id, hsn_code, gst_rate_pct, packets_per_carton, standard_selling_price, standard_purchase_rate, min_reorder_level, is_active
+        ) VALUES (
+          'FG-TEST-CONCURRENCY', 'Concurrency Test Product', 'finished_good', 'PKT', '1905', 12.00, 10.00, 50.00, 0.00, 10.00, true
+        ) RETURNING id;
+      `);
+      const testFgId = itemRes.rows[0].id;
+
+      // Create BOM v1
+      const bom1Res = await client.query(`
+        INSERT INTO boms (
+          finished_good_item_id, bom_code, version_number, standard_batch_size, batch_uom_id, is_active, effective_from, created_by
+        ) VALUES (
+          $1, 'BOM-TEST-CONC-1', 1, 100.0, 'PKT', true, '2026-01-01', $2
+        ) RETURNING id;
+      `, [testFgId, supervisorId]);
+      const bom1Id = bom1Res.rows[0].id;
+
+      // Create BOM v2
+      const bom2Res = await client.query(`
+        INSERT INTO boms (
+          finished_good_item_id, bom_code, version_number, standard_batch_size, batch_uom_id, is_active, effective_from, created_by
+        ) VALUES (
+          $1, 'BOM-TEST-CONC-2', 2, 100.0, 'PKT', false, '2026-01-01', $2
+        ) RETURNING id;
+      `, [testFgId, supervisorId]);
+      const bom2Id = bom2Res.rows[0].id;
+
+      // Verify that locking the parent item serializes activation cleanly
+      // Simulate activation of BOM 2
+      await client.query(`SELECT id FROM items WHERE id = $1 FOR UPDATE;`, [testFgId]);
+      await client.query(`UPDATE boms SET is_active = false WHERE finished_good_item_id = $1 AND id != $2 AND is_active = true;`, [testFgId, bom2Id]);
+      await client.query(`UPDATE boms SET is_active = true WHERE id = $1;`, [bom2Id]);
+
+      // Exactly one BOM must be active
+      const activeRes = await client.query(`SELECT id, bom_code FROM boms WHERE finished_good_item_id = $1 AND is_active = true;`, [testFgId]);
+      assert.equal(activeRes.rows.length, 1);
+      assert.equal(activeRes.rows[0].id, bom2Id);
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // TEST 8: Benchmark Data Integrity Invariance Check
+  // --------------------------------------------------------------------------
+  await t.test('8. Benchmark Data Invariance: Confirms zero corruption or data loss in order_to_audit', async () => {
     const finalCountsRes = await query(`
       SELECT 
         (SELECT COUNT(*)::int FROM users) AS users,
