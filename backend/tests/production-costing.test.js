@@ -22,6 +22,7 @@ test('Order-to-Audit: Phase 6 Production Management & Costing Integration Tests'
   const finishedGoodId = 'ffffffff-ffff-ffff-ffff-ffffffffffff'; // FG-MRK-200G
   const supplierId = '99999999-9999-9999-9999-999999999999'; // Trichy Agro Supplies
   const flourItemId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'; // RM-FLOUR
+  const oilItemId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'; // RM-OIL
   const spicesItemId = 'cccccccc-cccc-cccc-cccc-cccccccccccc'; // RM-SPICE-MIX
   const pouchItemId = 'dddddddd-dddd-dddd-dddd-dddddddddddd'; // PK-POUCH-200G
 
@@ -422,6 +423,13 @@ test('Order-to-Audit: Phase 6 Production Management & Costing Integration Tests'
         supplier_id: supplierId,
         bill_date: '2026-11-21',
         items: [
+          {
+            item_id: oilItemId,
+            quantity: 20.0,
+            uom_id: 'L',
+            unit_rate: 140.0,
+            gst_rate_pct: 5.0,
+          },
           {
             item_id: spicesItemId,
             quantity: 10.0,
