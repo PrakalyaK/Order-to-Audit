@@ -129,24 +129,71 @@ export const bomsService = {
 
     const { materials, ...headerData } = updateData;
 
-    // If materials are being updated on an unused BOM, perform the same validations
-    if (materials && materials.length > 0) {
+    // Validate standard_batch_size if updated
+    if (headerData.standard_batch_size !== undefined && headerData.standard_batch_size <= 0) {
+      throw ApiError.badRequest('standard_batch_size must be greater than 0');
+    }
+
+    // Validate batch_uom_id if updated
+    if (headerData.batch_uom_id !== undefined) {
+      const batchUom = await unitsRepository.findById(headerData.batch_uom_id);
+      if (!batchUom) {
+        throw ApiError.badRequest(`Batch unit '${headerData.batch_uom_id}' does not exist`);
+      }
+      const fg = await itemsRepository.findById(existing.finished_good_item_id);
+      const fgUom = await unitsRepository.findById(fg.base_uom_id);
+      if (batchUom.dimension !== fgUom.dimension && !(batchUom.dimension === 'packaging' && fgUom.dimension === 'count')) {
+        throw ApiError.badRequest(
+          `Batch UOM '${headerData.batch_uom_id}' dimension (${batchUom.dimension}) is incompatible with finished good base UOM '${fg.base_uom_id}' (${fgUom.dimension})`
+        );
+      }
+    }
+
+    // If materials are being updated on an unused BOM, perform identical comprehensive validations
+    if (materials !== undefined) {
+      if (materials.length === 0) {
+        throw ApiError.badRequest('A BOM must have at least one material entry');
+      }
+
       const seenItemIds = new Set();
       for (const mat of materials) {
+        // Rule 3: Finished product cannot be its own raw material
         if (mat.item_id === existing.finished_good_item_id) {
-          throw ApiError.badRequest('Finished good cannot be included as a raw material in its own BOM');
+          throw ApiError.badRequest(`Finished good item cannot be included as its own raw material in the BOM`);
         }
+
+        // Rule 6: Duplicate material prevention
         if (seenItemIds.has(mat.item_id)) {
-          throw ApiError.badRequest(`Duplicate material entry in BOM`);
+          throw ApiError.badRequest(`Duplicate material entry: item '${mat.item_id}' is specified more than once in this BOM`);
         }
         seenItemIds.add(mat.item_id);
 
+        // Rule 2: Material existence & non-finished good validation
         const matItem = await itemsRepository.findById(mat.item_id);
         if (!matItem) {
-          throw ApiError.notFound(`Material item '${mat.item_id}' not found`);
+          throw ApiError.notFound(`Material item with ID '${mat.item_id}' not found`);
         }
         if (matItem.item_type === ITEM_TYPES.FINISHED_GOOD) {
-          throw ApiError.badRequest(`Material '${matItem.sku}' cannot be a finished_good`);
+          throw ApiError.badRequest(
+            `Material '${matItem.sku}' is a 'finished_good'. Only raw_material, packaging, or work_in_progress items can be BOM materials.`
+          );
+        }
+
+        // Rule 4: Material quantity must be positive
+        if (mat.standard_qty <= 0) {
+          throw ApiError.badRequest(`Quantity for material '${matItem.sku}' must be greater than 0`);
+        }
+
+        // Rule 5: Material UOM existence & dimensional compatibility
+        const matUom = await unitsRepository.findById(mat.uom_id);
+        if (!matUom) {
+          throw ApiError.badRequest(`UOM '${mat.uom_id}' for material '${matItem.sku}' does not exist`);
+        }
+        const matBaseUom = await unitsRepository.findById(matItem.base_uom_id);
+        if (matUom.dimension !== matBaseUom.dimension && !(matUom.dimension === 'packaging' && matBaseUom.dimension === 'count')) {
+          throw ApiError.badRequest(
+            `UOM '${mat.uom_id}' (${matUom.dimension}) for material '${matItem.sku}' is incompatible with item base UOM '${matItem.base_uom_id}' (${matBaseUom.dimension})`
+          );
         }
       }
     }
@@ -180,13 +227,50 @@ export const bomsService = {
       throw ApiError.badRequest(`BOM '${bom.bom_code}' has no configured material items`);
     }
 
-    // Scale factor: (Requested output / BOM standard batch size)
     const standardBatchSize = parseFloat(bom.standard_batch_size);
     if (standardBatchSize <= 0) {
       throw ApiError.badRequest(`Invalid BOM batch size: ${standardBatchSize}`);
     }
 
-    const scaleFactor = requestedOutputQty / standardBatchSize;
+    const targetOutputUomId = outputUomId ? outputUomId.trim().toUpperCase() : bom.batch_uom_id;
+    let normalizedOutputQty = requestedOutputQty;
+
+    // Output UOM conversion: If requested output UOM differs from BOM batch UOM, convert accurately
+    if (targetOutputUomId !== bom.batch_uom_id) {
+      const targetUom = await unitsRepository.findById(targetOutputUomId);
+      if (!targetUom) {
+        throw ApiError.badRequest(`Unit of measure '${targetOutputUomId}' does not exist`);
+      }
+
+      try {
+        // Convert requested output quantity to finished good's base UOM
+        const baseQty = await unitsRepository.computeBaseQuantity(
+          bom.finished_good_item_id,
+          requestedOutputQty,
+          targetOutputUomId
+        );
+
+        // Convert 1 unit of BOM's batch UOM to finished good's base UOM
+        const batchUomInBase = await unitsRepository.computeBaseQuantity(
+          bom.finished_good_item_id,
+          1,
+          bom.batch_uom_id
+        );
+
+        if (batchUomInBase <= 0) {
+          throw new Error('Batch UOM conversion factor must be positive');
+        }
+
+        normalizedOutputQty = Math.round((baseQty / batchUomInBase) * 10000) / 10000;
+      } catch (err) {
+        throw ApiError.badRequest(
+          `Incompatible output UOM '${targetOutputUomId}' for finished good '${bom.finished_good_sku}' with batch UOM '${bom.batch_uom_id}': ${err.message}`
+        );
+      }
+    }
+
+    // Scale factor: (Normalized output / BOM standard batch size)
+    const scaleFactor = Math.round((normalizedOutputQty / standardBatchSize) * 10000) / 10000;
 
     const calculatedMaterials = bom.materials.map((mat) => {
       const baseQtyPerBatch = parseFloat(mat.standard_qty);
@@ -220,11 +304,19 @@ export const bomsService = {
         sku: bom.finished_good_sku,
         name: bom.finished_good_name,
       },
+      requested_output: {
+        quantity: requestedOutputQty,
+        uom_id: targetOutputUomId,
+      },
+      normalized_output: {
+        quantity: normalizedOutputQty,
+        uom_id: bom.batch_uom_id,
+      },
       standard_batch_size: standardBatchSize,
       batch_uom_id: bom.batch_uom_id,
+      scale_factor: scaleFactor,
       requested_output_qty: requestedOutputQty,
-      requested_output_uom_id: outputUomId || bom.batch_uom_id,
-      scale_factor: Math.round(scaleFactor * 10000) / 10000,
+      requested_output_uom_id: targetOutputUomId,
       materials: calculatedMaterials,
       note: 'Purely mathematical planning requirement calculation. No inventory was deducted or altered.',
     };

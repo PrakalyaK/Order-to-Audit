@@ -79,6 +79,7 @@ test('Order-to-Audit: Bill of Materials (BOM) Management Tests', async (t) => {
       name: 'Murukku 200g Packet',
       item_type: 'finished_good',
       base_uom_id: 'PKT',
+      packets_per_carton: 20,
       is_active: true,
     }],
   ]);
@@ -90,6 +91,7 @@ test('Order-to-Audit: Bill of Materials (BOM) Management Tests', async (t) => {
   const origAuthFindById = authRepository.findById;
   const origItemsFindById = itemsRepository.findById;
   const origUnitsFindById = unitsRepository.findById;
+  const origUnitsComputeBaseQuantity = unitsRepository.computeBaseQuantity;
   const origBoms = { ...bomsRepository };
 
   t.before(async () => {
@@ -101,6 +103,25 @@ test('Order-to-Audit: Bill of Materials (BOM) Management Tests', async (t) => {
 
     // 3. Mock unitsRepository
     unitsRepository.findById = async (id) => mockUnits.get(id) || null;
+    unitsRepository.computeBaseQuantity = async (itemId, quantity, uomId) => {
+      const item = mockItems.get(itemId);
+      if (!item) throw new Error(`Item ${itemId} not found`);
+      const uom = mockUnits.get(uomId);
+      if (!uom) throw new Error(`UOM ${uomId} not found`);
+      if (uomId === item.base_uom_id) return quantity;
+      if (uomId === 'CTN' && item.base_uom_id === 'PKT') {
+        const ppc = item.packets_per_carton || 20;
+        return quantity * ppc;
+      }
+      if (uomId === 'PKT' && item.base_uom_id === 'CTN') {
+        const ppc = item.packets_per_carton || 20;
+        return quantity / ppc;
+      }
+      if (uom.base_unit_id === item.base_uom_id) {
+        return quantity * uom.conversion_factor_to_base;
+      }
+      throw new Error(`Incompatible UOM conversion: cannot convert ${uomId} to item base unit ${item.base_uom_id}`);
+    };
 
     // 4. Mock bomsRepository
     bomsRepository.findAll = async ({ page = 1, limit = 20, finished_good_item_id }) => {
@@ -228,6 +249,7 @@ test('Order-to-Audit: Bill of Materials (BOM) Management Tests', async (t) => {
     authRepository.findById = origAuthFindById;
     itemsRepository.findById = origItemsFindById;
     unitsRepository.findById = origUnitsFindById;
+    unitsRepository.computeBaseQuantity = origUnitsComputeBaseQuantity;
     Object.assign(bomsRepository, origBoms);
 
     if (server) {
@@ -526,5 +548,192 @@ test('Order-to-Audit: Bill of Materials (BOM) Management Tests', async (t) => {
       }),
     });
     assert.equal(postRes.status, 403, 'Salesman must receive 403 on BOM create');
+  });
+
+  await t.test('11. Output UOM Conversion: Accurately converts compatible output UOM (10 CTN = 200 PKT, scale = 1.0)', async () => {
+    // Murukku batch size = 200 PKT. 1 CTN = 20 PKT.
+    // 10 CTN = 200 PKT -> exact scale factor 1.0
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}/calculate-requirements`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        requested_output_qty: 10.0,
+        output_uom_id: 'CTN',
+      }),
+    });
+
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.success, true);
+    assert.equal(body.data.requested_output.quantity, 10.0);
+    assert.equal(body.data.requested_output.uom_id, 'CTN');
+    assert.equal(body.data.normalized_output.quantity, 200.0);
+    assert.equal(body.data.normalized_output.uom_id, 'PKT');
+    assert.equal(body.data.scale_factor, 1.0);
+
+    const flour = body.data.materials.find((m) => m.item_sku === 'RM-FLOUR-001');
+    assert.equal(flour.planned_required_qty, 40.0);
+    assert.equal(flour.total_required_qty, 40.0);
+  });
+
+  await t.test('12. Output UOM Conversion: Rejects incompatible dimension output UOM (400 Bad Request)', async () => {
+    // Finished good is count/packaging ('PKT'). 'L' is volume. Incompatible!
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}/calculate-requirements`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        requested_output_qty: 5.0,
+        output_uom_id: 'L',
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('Incompatible output UOM'));
+  });
+
+  await t.test('13. Output UOM Conversion: Rejects non-existent output UOM (400 Bad Request)', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}/calculate-requirements`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        requested_output_qty: 10.0,
+        output_uom_id: 'XYZ',
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('does not exist'));
+  });
+
+  await t.test('14. BOM Update Validation: Rejects duplicate material items (400 Bad Request)', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        materials: [
+          { item_id: 'b0000000-0000-0000-0000-000000000001', standard_qty: 10.0, uom_id: 'KG' },
+          { item_id: 'b0000000-0000-0000-0000-000000000001', standard_qty: 20.0, uom_id: 'KG' },
+        ],
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('Duplicate material entry'));
+  });
+
+  await t.test('15. BOM Update Validation: Rejects material of type finished_good (400 Bad Request)', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        materials: [
+          { item_id: 'b0000000-0000-0000-0000-000000000004', standard_qty: 5.0, uom_id: 'PKT' },
+        ],
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('cannot be included as its own raw material') || body.message.includes('finished_good'));
+  });
+
+  await t.test('16. BOM Update Validation: Rejects non-positive material quantity (400 Bad Request)', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        materials: [
+          { item_id: 'b0000000-0000-0000-0000-000000000001', standard_qty: -5.0, uom_id: 'KG' },
+        ],
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    const hasQtyError = body.message.includes('greater than 0') || (body.errors && body.errors.some((e) => e.message.includes('greater than 0')));
+    assert.ok(hasQtyError, 'Should report that standard_qty must be greater than 0');
+  });
+
+  await t.test('17. BOM Update Validation: Rejects incompatible material UOM dimension (400 Bad Request)', async () => {
+    // Flour base UOM is KG (weight). Providing 'L' (volume) must fail
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        materials: [
+          { item_id: 'b0000000-0000-0000-0000-000000000001', standard_qty: 10.0, uom_id: 'L' },
+        ],
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('incompatible with item base UOM'));
+  });
+
+  await t.test('18. BOM Update Validation: Rejects non-positive standard_batch_size (400 Bad Request)', async () => {
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        standard_batch_size: 0,
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+  });
+
+  await t.test('19. BOM Update Validation: Rejects incompatible batch_uom_id dimension (400 Bad Request)', async () => {
+    // Finished good base UOM is 'PKT' (count). 'KG' (weight) is incompatible
+    const res = await fetch(`${baseUrl}/api/v1/boms/${createdBomId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supervisorToken}`,
+      },
+      body: JSON.stringify({
+        batch_uom_id: 'KG',
+      }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.ok(body.message.includes('incompatible with finished good base UOM'));
   });
 });

@@ -31,6 +31,9 @@
 \echo '>>> Applying Migration 005: Analytical Views & Auditor Registers...'
 \i database/migrations/005_views.sql
 
+\echo '>>> Applying Migration 006: Production Hardening, Costing & Immutability...'
+\i database/migrations/006_production_hardening_and_immutability.sql
+
 \echo '>>> Seeding Benchmark Scenario Data via Atomic Posting Functions...'
 \i database/seeds/benchmark_seed.sql
 

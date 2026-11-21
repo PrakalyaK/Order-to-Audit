@@ -158,6 +158,9 @@ export const bomsRepository = {
 
       // If this BOM is active, deactivate existing active BOMs for this product first
       if (bomData.is_active) {
+        // Concurrency safeguard: Lock parent finished good item record to serialize concurrent activations
+        await dbClient.query(`SELECT id FROM items WHERE id = $1 FOR UPDATE;`, [bomData.finished_good_item_id]);
+
         await dbClient.query(
           `UPDATE boms SET is_active = false WHERE finished_good_item_id = $1 AND is_active = true;`,
           [bomData.finished_good_item_id]
@@ -230,9 +233,13 @@ export const bomsRepository = {
       if (bomData.is_active) {
         const current = await dbClient.query(`SELECT finished_good_item_id FROM boms WHERE id = $1;`, [bomId]);
         if (current.rows.length > 0) {
+          const fgId = current.rows[0].finished_good_item_id;
+          // Concurrency safeguard: Lock parent finished good item record to serialize concurrent activations
+          await dbClient.query(`SELECT id FROM items WHERE id = $1 FOR UPDATE;`, [fgId]);
+
           await dbClient.query(
             `UPDATE boms SET is_active = false WHERE finished_good_item_id = $1 AND id != $2 AND is_active = true;`,
-            [current.rows[0].finished_good_item_id, bomId]
+            [fgId, bomId]
           );
         }
       }
@@ -300,10 +307,14 @@ export const bomsRepository = {
       }
 
       if (isActive) {
+        const finishedGoodItemId = bom.rows[0].finished_good_item_id;
+        // Concurrency safeguard: Lock parent finished good item record to serialize concurrent activations
+        await client.query(`SELECT id FROM items WHERE id = $1 FOR UPDATE;`, [finishedGoodItemId]);
+
         // Deactivate other versions of the same product
         await client.query(
           `UPDATE boms SET is_active = false WHERE finished_good_item_id = $1 AND id != $2 AND is_active = true;`,
-          [bom.rows[0].finished_good_item_id, bomId]
+          [finishedGoodItemId, bomId]
         );
       }
 
