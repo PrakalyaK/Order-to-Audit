@@ -2,6 +2,8 @@ import { inventoryRepository } from './inventory.repository.js';
 import { itemsRepository } from '../items/items.repository.js';
 import { unitsRepository } from '../units/units.repository.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { getClient } from '../../config/db.js';
+import { accountingService } from '../accounting/accounting.service.js';
 
 export const inventoryService = {
   /**
@@ -120,5 +122,143 @@ export const inventoryService = {
       all_sufficient: allSufficient,
       items: availabilityResults,
     };
+  },
+
+  /**
+   * Create stock adjustment
+   */
+  async createStockAdjustment(data, user) {
+    const item = await itemsRepository.findById(data.item_id);
+    if (!item) {
+      throw ApiError.notFound(`Item with ID ${data.item_id} not found`);
+    }
+
+    const adjustmentNumber = await inventoryRepository.generateAdjustmentNumber(data.adjustment_date);
+    return inventoryRepository.createStockAdjustment({
+      ...data,
+      adjustment_number: adjustmentNumber,
+      authorized_by: user.id,
+      status: 'draft',
+    });
+  },
+
+  /**
+   * Post stock adjustment and integrate with double-entry accounting
+   */
+  async postStockAdjustment(id, user) {
+    const adj = await inventoryRepository.findAdjustmentById(id);
+    if (!adj) {
+      throw ApiError.notFound(`Stock adjustment with ID ${id} not found`);
+    }
+
+    if (adj.status === 'posted') {
+      throw ApiError.badRequest(`Stock adjustment ${adj.adjustment_number} is already posted`);
+    }
+
+    const updatedAdj = await inventoryRepository.postStockAdjustment(id, user.id);
+
+    // Accounting Integration
+    try {
+      const delta = Number(updatedAdj.discrepancy_quantity);
+      const totalCost = Math.abs(Number(updatedAdj.total_cost));
+
+      if (totalCost > 0) {
+        const isFg = updatedAdj.item_type === 'finished_good';
+        const invAccountCode = isFg ? '1330' : '1310'; // 1330 FG, 1310 Raw Materials
+
+        const client = await getClient();
+        try {
+          await client.query('BEGIN');
+
+          const invAccRes = await client.query('SELECT id FROM chart_of_accounts WHERE account_code = $1', [invAccountCode]);
+          const lossAccRes = await client.query('SELECT id FROM chart_of_accounts WHERE account_code = $1', ['6450']); // Inventory Write-Off & Stock Loss
+          const incomeAccRes = await client.query('SELECT id FROM chart_of_accounts WHERE account_code = $1', ['4200']); // Other Operating Income
+
+          const invAccId = invAccRes.rows[0].id;
+          const lossAccId = lossAccRes.rows[0]?.id;
+          const incomeAccId = incomeAccRes.rows[0].id;
+
+          let lines;
+          let narration;
+
+          if (delta < 0) {
+            // Write-off / Loss: DR Loss Expense, CR Inventory
+            lines = [
+              {
+                account_id: lossAccId,
+                debit_amount: totalCost,
+                credit_amount: 0,
+                description: `Stock adjustment write-off: ${updatedAdj.adjustment_number} (${updatedAdj.reason})`,
+              },
+              {
+                account_id: invAccId,
+                debit_amount: 0,
+                credit_amount: totalCost,
+                description: `Inventory reduction for ${updatedAdj.item_name} (${updatedAdj.adjustment_number})`,
+              },
+            ];
+            narration = `Stock Write-Off: ${updatedAdj.adjustment_number} (${updatedAdj.reason})`;
+          } else {
+            // Gain / Surplus: DR Inventory, CR Other Operating Income
+            lines = [
+              {
+                account_id: invAccId,
+                debit_amount: totalCost,
+                credit_amount: 0,
+                description: `Inventory surplus for ${updatedAdj.item_name} (${updatedAdj.adjustment_number})`,
+              },
+              {
+                account_id: incomeAccId,
+                debit_amount: 0,
+                credit_amount: totalCost,
+                description: `Surplus adjustment income: ${updatedAdj.adjustment_number}`,
+              },
+            ];
+            narration = `Stock Surplus Gain: ${updatedAdj.adjustment_number} (${updatedAdj.reason})`;
+          }
+
+          const entryDate = updatedAdj.adjustment_date
+            ? new Date(updatedAdj.adjustment_date).toISOString().split('T')[0]
+            : new Date().toISOString().split('T')[0];
+
+          await accountingService.createJournalEntry({
+            entry_date: entryDate,
+            source_type: 'STOCK_ADJUSTMENT',
+            source_id: updatedAdj.id,
+            source_reference: updatedAdj.adjustment_number,
+            narration,
+            post_immediately: true,
+            lines,
+          }, user);
+
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK');
+          console.error('Accounting posting for stock adjustment skipped or failed:', e.message);
+        } finally {
+          client.release();
+        }
+      }
+    } catch (err) {
+      console.error('Accounting integration error:', err.message);
+    }
+
+    return updatedAdj;
+  },
+
+  async getAdjustments(filters = {}) {
+    return inventoryRepository.findAdjustments(filters);
+  },
+
+  async getAdjustmentById(id) {
+    const adj = await inventoryRepository.findAdjustmentById(id);
+    if (!adj) {
+      throw ApiError.notFound(`Stock adjustment with ID ${id} not found`);
+    }
+    return adj;
+  },
+
+  async getDiscrepancies() {
+    return inventoryRepository.findDiscrepancies();
   },
 };

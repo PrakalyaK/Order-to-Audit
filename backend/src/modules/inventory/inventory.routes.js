@@ -8,6 +8,8 @@ import {
   queryStockSchema,
   queryLedgerSchema,
   checkAvailabilitySchema,
+  createStockAdjustmentSchema,
+  queryAdjustmentsSchema,
 } from './inventory.validation.js';
 
 const router = Router();
@@ -72,6 +74,64 @@ router.post(
   ),
   validate(checkAvailabilitySchema),
   inventoryController.checkAvailability
+);
+
+// ============================================================================
+// STOCK ADJUSTMENTS & RECONCILIATION
+// ============================================================================
+
+router.get(
+  '/adjustments/discrepancies',
+  authorizeRoles(
+    ROLES.OWNER,
+    ROLES.FACTORY_ADMIN,
+    ROLES.PRODUCTION_SUPERVISOR,
+    ROLES.AUDITOR
+  ),
+  inventoryController.getDiscrepancies
+);
+
+router.get(
+  '/adjustments',
+  authorizeRoles(
+    ROLES.OWNER,
+    ROLES.FACTORY_ADMIN,
+    ROLES.PRODUCTION_SUPERVISOR,
+    ROLES.AUDITOR
+  ),
+  validate(queryAdjustmentsSchema, 'query'),
+  inventoryController.getAdjustments
+);
+
+router.post(
+  '/adjustments',
+  authorizeRoles(
+    ROLES.OWNER,
+    ROLES.FACTORY_ADMIN,
+    ROLES.PRODUCTION_SUPERVISOR
+  ),
+  validate(createStockAdjustmentSchema),
+  inventoryController.createStockAdjustment
+);
+
+router.get(
+  '/adjustments/:id',
+  authorizeRoles(
+    ROLES.OWNER,
+    ROLES.FACTORY_ADMIN,
+    ROLES.PRODUCTION_SUPERVISOR,
+    ROLES.AUDITOR
+  ),
+  inventoryController.getAdjustmentById
+);
+
+router.post(
+  '/adjustments/:id/post',
+  authorizeRoles(
+    ROLES.OWNER,
+    ROLES.FACTORY_ADMIN
+  ),
+  inventoryController.postStockAdjustment
 );
 
 // GET /api/v1/inventory/stock/:itemId - Stock balance for single item

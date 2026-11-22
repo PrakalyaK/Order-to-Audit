@@ -36,3 +36,29 @@ export const availabilityItemSchema = z.object({
 export const checkAvailabilitySchema = z.object({
   items: z.array(availabilityItemSchema).min(1, 'At least one item is required to check availability'),
 });
+
+export const createStockAdjustmentSchema = z.object({
+  item_id: z.string({ required_error: 'item_id is required' }).uuid('item_id must be a valid UUID'),
+  adjustment_date: z.string({ required_error: 'adjustment_date is required' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'adjustment_date must be in YYYY-MM-DD format'),
+  physical_quantity: z.coerce.number().min(0, 'physical_quantity must be non-negative'),
+  adjustment_type: z.enum([
+    'physical_count',
+    'damage_write_off',
+    'expiry_write_off',
+    'scrap',
+    'sampling',
+  ]).default('physical_count'),
+  batch_number: z.string().trim().optional().nullable(),
+  warehouse_id: z.string().uuid().optional().nullable(),
+  reason: z.string({ required_error: 'reason is required' }).trim().min(3, 'reason must be at least 3 characters').max(500),
+});
+
+export const queryAdjustmentsSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  item_id: z.string().uuid().optional(),
+  status: z.string().optional(),
+  adjustment_type: z.string().optional(),
+  from_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
