@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as purchasesController from './purchases.controller.js';
-import { authenticate } from '../../middleware/auth.middleware.js';
+import { authenticateJWT } from '../../middleware/auth.middleware.js';
 import { authorizeRoles } from '../../middleware/role.middleware.js';
 import { validate } from '../../middleware/validate.middleware.js';
 import { ROLES } from '../auth/auth.constants.js';
@@ -13,7 +13,7 @@ import {
 const router = Router();
 
 // Protect all purchase routes with JWT authentication
-router.use(authenticate);
+router.use(authenticateJWT);
 
 // GET /api/v1/purchases - List purchases (Owner, Factory Admin, Auditor)
 router.get(
@@ -61,3 +61,4 @@ router.post(
 );
 
 export default router;
+

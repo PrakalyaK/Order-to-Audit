@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as inventoryController from './inventory.controller.js';
-import { authenticate } from '../../middleware/auth.middleware.js';
+import { authenticateJWT } from '../../middleware/auth.middleware.js';
 import { authorizeRoles } from '../../middleware/role.middleware.js';
 import { validate } from '../../middleware/validate.middleware.js';
 import { ROLES } from '../auth/auth.constants.js';
@@ -13,7 +13,7 @@ import {
 const router = Router();
 
 // Protect all inventory routes with JWT authentication
-router.use(authenticate);
+router.use(authenticateJWT);
 
 // GET /api/v1/inventory/stock - List stock balances (all roles can view stock)
 router.get(
@@ -88,3 +88,4 @@ router.get(
 );
 
 export default router;
+

@@ -11,11 +11,11 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   let baseUrl;
 
   // Real benchmark user IDs from order_to_audit
-  const ownerId = '66666666-6666-6666-6666-666666666666'; // owner_main (owner)
-  const adminId = '33333333-3333-3333-3333-333333333333'; // admin_factory (factory_admin)
-  const supervisorId = '44444444-4444-4444-4444-444444444444'; // supervisor_floor (production_supervisor)
-  const salesmanId = '11111111-1111-1111-1111-111111111111'; // salesman_a (salesman)
-  const auditorId = '55555555-5555-5555-5555-555555555555'; // auditor_ext (auditor)
+  const ownerId = '11111111-1111-1111-1111-111111111111';
+  const adminId = '22222222-2222-2222-2222-222222222222';
+  const supervisorId = '33333333-3333-3333-3333-333333333333';
+  const salesmanId = '55555555-5555-5555-5555-555555555555';
+  const auditorId = '66666666-6666-6666-6666-666666666666';
 
   const supplierId = '99999999-9999-9999-9999-999999999999'; // Trichy Agro Supplies
   const customerId = '77777777-7777-7777-7777-777777777777'; // Retailer A
@@ -24,39 +24,12 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   const pouchItemId = 'dddddddd-dddd-dddd-dddd-dddddddddddd'; // PK-POUCH-200G
   const finishedGoodId = 'ffffffff-ffff-ffff-ffff-ffffffffffff'; // FG-MRK-200G
 
-  // Clean any test residue from previous runs safely
-  const preClient = await getClient();
-  try {
-    await preClient.query('SET session_replication_role = replica');
-    await preClient.query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
-    await preClient.query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id IN (SELECT id FROM purchase_bills WHERE bill_number LIKE 'TEST-%')`);
-    await preClient.query(`DELETE FROM purchase_bills WHERE bill_number LIKE 'TEST-%'`);
-    await preClient.query(`DELETE FROM audit_logs WHERE entity_name IN ('purchase_bills', 'purchase_bill_items') AND entity_id NOT IN ('ba000001-0000-0000-0000-000000000001')`);
-    await preClient.query(`
-      UPDATE item_stock_balances
-      SET current_base_qty = 120.0000, current_moving_wac = 43.1250, current_total_value = 5175.00
-      WHERE item_id = $1
-    `, [flourItemId]);
-    await preClient.query(`
-      UPDATE item_stock_balances
-      SET current_base_qty = 19.5000, current_moving_wac = 140.0000, current_total_value = 2730.00
-      WHERE item_id = $1
-    `, [oilItemId]);
-    await preClient.query('SET session_replication_role = origin');
-  } finally {
-    preClient.release();
-  }
-
-  // Snapshot initial stock balances
-  const initialStockRes = await query('SELECT item_id, current_base_qty, current_moving_wac, current_total_value FROM item_stock_balances');
-  const initialStockBalances = initialStockRes.rows;
-
   // Signed JWTs
-  const ownerToken = jwt.sign({ sub: ownerId, username: 'owner_main', role: ROLES.OWNER }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
-  const adminToken = jwt.sign({ sub: adminId, username: 'admin_factory', role: ROLES.FACTORY_ADMIN }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
-  const supervisorToken = jwt.sign({ sub: supervisorId, username: 'supervisor_floor', role: ROLES.PRODUCTION_SUPERVISOR }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
-  const salesmanToken = jwt.sign({ sub: salesmanId, username: 'salesman_a', role: ROLES.SALESMAN }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
-  const auditorToken = jwt.sign({ sub: auditorId, username: 'auditor_ext', role: ROLES.AUDITOR }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
+  const ownerToken = jwt.sign({ sub: ownerId, username: 'factory_owner', role: ROLES.OWNER }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
+  const adminToken = jwt.sign({ sub: adminId, username: 'admin_user', role: ROLES.FACTORY_ADMIN }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
+  const supervisorToken = jwt.sign({ sub: supervisorId, username: 'supervisor_user', role: ROLES.PRODUCTION_SUPERVISOR }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
+  const salesmanToken = jwt.sign({ sub: salesmanId, username: 'sales_user', role: ROLES.SALESMAN }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
+  const auditorToken = jwt.sign({ sub: auditorId, username: 'auditor_user', role: ROLES.AUDITOR }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
 
   // Snapshot initial counts
   const initialCountsRes = await query(`
@@ -495,34 +468,32 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   // ==========================================================================
 
   await t.test('17. Teardown: Clean up test purchases and restore benchmark balances', async () => {
-    const postClient = await getClient();
-    try {
-      await postClient.query('SET session_replication_role = replica');
-      // Clean up ledger entries created by test
-      await postClient.query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
-      // Clean up test purchase bill items and bill
-      await postClient.query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id IN (SELECT id FROM purchase_bills WHERE bill_number LIKE 'TEST-%')`);
-      await postClient.query(`DELETE FROM purchase_bills WHERE bill_number LIKE 'TEST-%'`);
+    // Clean up ledger entries created by test
+    await query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
+    // Clean up test purchase bill items and bill
+    await query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id = $1`, [createdPurchaseBillId]);
+    await query(`DELETE FROM purchase_bills WHERE id = $1`, [createdPurchaseBillId]);
 
-      // Restore stock balances to pristine benchmark state
-      for (const bal of initialStockBalances) {
-        await postClient.query(`
-          UPDATE item_stock_balances
-          SET current_base_qty = $1, current_moving_wac = $2, current_total_value = $3
-          WHERE item_id = $4;
-        `, [bal.current_base_qty, bal.current_moving_wac, bal.current_total_value, bal.item_id]);
-      }
+    // Restore Flour and Oil stock balance to pristine benchmark state
+    // (Benchmark: Flour 160.0000 kg @ ₹43.1250, value ₹6,900.00; Oil 40.0000 L @ ₹100.0000, value ₹4,000.00)
+    await query(`
+      UPDATE item_stock_balances
+      SET current_base_qty = 160.0000, current_moving_wac = 43.1250, current_total_value = 6900.00
+      WHERE item_id = $1;
+    `, [flourItemId]);
 
-      // Clean up audit logs from test bill
-      await postClient.query(`
-        DELETE FROM audit_logs 
-        WHERE entity_name IN ('purchase_bills', 'purchase_bill_items') 
-          AND entity_id NOT IN ('ba000001-0000-0000-0000-000000000001')
-      `);
-      await postClient.query('SET session_replication_role = origin');
-    } finally {
-      postClient.release();
-    }
+    await query(`
+      UPDATE item_stock_balances
+      SET current_base_qty = 40.0000, current_moving_wac = 100.0000, current_total_value = 4000.00
+      WHERE item_id = $1;
+    `, [oilItemId]);
+
+    // Clean up audit logs from test bill
+    await query(`
+      DELETE FROM audit_logs 
+      WHERE entity_name IN ('purchase_bills', 'purchase_bill_items') 
+        AND entity_id = $1
+    `, [createdPurchaseBillId]);
 
     // Verify benchmark counts are identical to start
     const finalCountsRes = await query(`
@@ -540,3 +511,4 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
     assert.deepEqual(finalCounts, initialCounts, 'Database counts must match initial benchmark counts exactly');
   });
 });
+

@@ -10,7 +10,6 @@ import partiesRoutes from './modules/parties/parties.routes.js';
 import bomsRoutes from './modules/boms/boms.routes.js';
 import purchasesRoutes from './modules/purchases/purchases.routes.js';
 import inventoryRoutes from './modules/inventory/inventory.routes.js';
-import productionRoutes from './modules/production/production.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
@@ -75,7 +74,6 @@ app.use(`${env.apiPrefix}/parties`, partiesRoutes);
 app.use(`${env.apiPrefix}/boms`, bomsRoutes);
 app.use(`${env.apiPrefix}/purchases`, purchasesRoutes);
 app.use(`${env.apiPrefix}/inventory`, inventoryRoutes);
-app.use(`${env.apiPrefix}/production`, productionRoutes);
 app.use(`${env.apiPrefix}/health`, healthRoutes);
 app.use('/health', healthRoutes);
 
