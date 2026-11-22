@@ -43,6 +43,9 @@
 \echo '>>> Applying Migration 009: Payments, Allocations & Receivables Hardening...'
 \i database/migrations/009_payments_receivables_hardening.sql
 
+\echo '>>> Applying Migration 010: Financial Accounting & Reporting...'
+\i database/migrations/010_financial_accounting.sql
+
 \echo '>>> Seeding Benchmark Scenario Data via Atomic Posting Functions...'
 \i database/seeds/benchmark_seed.sql
 
