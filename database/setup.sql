@@ -46,6 +46,9 @@
 \echo '>>> Applying Migration 010: Financial Accounting & Reporting...'
 \i database/migrations/010_financial_accounting.sql
 
+\echo '>>> Applying Migration 011: Advanced ERP Operations (Supplier Payables, Multi-Warehouse, Batch/FEFO, Adjustments, Payroll)...'
+\i database/migrations/011_advanced_erp_operations.sql
+
 \echo '>>> Seeding Benchmark Scenario Data via Atomic Posting Functions...'
 \i database/seeds/benchmark_seed.sql
 
