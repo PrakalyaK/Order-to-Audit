@@ -276,8 +276,7 @@ class AccountingRepository {
         coa.account_name,
         coa.account_type,
         coa.normal_balance,
-        p.trade_name AS party_name,
-        p.legal_name AS party_legal_name
+        p.trade_name AS party_name
       FROM journal_entry_lines jel
       JOIN chart_of_accounts coa ON jel.account_id = coa.id
       LEFT JOIN parties p ON jel.party_id = p.id
