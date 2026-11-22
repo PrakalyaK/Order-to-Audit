@@ -486,6 +486,15 @@ BEGIN
         OR
         (movement_type = 'WAREHOUSE_TRANSFER_IN' AND warehouse_transfer_item_id IS NOT NULL AND purchase_bill_item_id IS NULL AND production_run_input_id IS NULL AND production_run_yield_id IS NULL AND dispatch_item_id IS NULL AND stock_adjustment_id IS NULL)
     );
+
+    ALTER TABLE inventory_ledger DROP CONSTRAINT IF EXISTS chk_inventory_movement_sign;
+    ALTER TABLE inventory_ledger ADD CONSTRAINT chk_inventory_movement_sign CHECK (
+        (movement_type IN ('OPENING_BALANCE', 'PURCHASE_RECEIPT', 'PRODUCTION_YIELD', 'SALES_RETURN', 'WAREHOUSE_TRANSFER_IN') AND base_quantity_delta >= 0)
+        OR
+        (movement_type IN ('PRODUCTION_ISSUE', 'SALES_DISPATCH', 'WAREHOUSE_TRANSFER_OUT') AND base_quantity_delta <= 0)
+        OR
+        (movement_type = 'STOCK_ADJUSTMENT')
+    );
 END $$;
 
 -- View: Warehouse Stock Balances

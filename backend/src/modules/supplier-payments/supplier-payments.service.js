@@ -2,6 +2,7 @@ import { getClient } from '../../config/db.js';
 import { supplierPaymentsRepository } from './supplier-payments.repository.js';
 import { roundMoney, SUPPLIER_PAYMENT_STATUS } from './supplier-payments.constants.js';
 import { accountingService } from '../accounting/accounting.service.js';
+import { accountingRepository } from '../accounting/accounting.repository.js';
 import { STANDARD_ACCOUNTS, SOURCE_TYPES, JOURNAL_ENTRY_STATUS } from '../accounting/accounting.constants.js';
 
 class SupplierPaymentsService {
