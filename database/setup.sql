@@ -40,6 +40,9 @@
 \echo '>>> Applying Migration 008: Sales, Dispatch & Invoicing Hardening & Audit Trail...'
 \i database/migrations/008_sales_dispatch_invoicing_hardening.sql
 
+\echo '>>> Applying Migration 009: Payments, Allocations & Receivables Hardening...'
+\i database/migrations/009_payments_receivables_hardening.sql
+
 \echo '>>> Seeding Benchmark Scenario Data via Atomic Posting Functions...'
 \i database/seeds/benchmark_seed.sql
 

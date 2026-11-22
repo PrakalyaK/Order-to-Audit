@@ -14,6 +14,7 @@ import productionRoutes from './modules/production/production.routes.js';
 import salesOrdersRoutes from './modules/sales-orders/sales-orders.routes.js';
 import invoicesRoutes from './modules/invoices/invoices.routes.js';
 import dispatchesRoutes from './modules/dispatches/dispatches.routes.js';
+import paymentsRoutes from './modules/payments/payments.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
@@ -82,6 +83,7 @@ app.use(`${env.apiPrefix}/production`, productionRoutes);
 app.use(`${env.apiPrefix}/sales-orders`, salesOrdersRoutes);
 app.use(`${env.apiPrefix}/invoices`, invoicesRoutes);
 app.use(`${env.apiPrefix}/dispatches`, dispatchesRoutes);
+app.use(`${env.apiPrefix}/payments`, paymentsRoutes);
 app.use(`${env.apiPrefix}/health`, healthRoutes);
 app.use('/health', healthRoutes);
 
