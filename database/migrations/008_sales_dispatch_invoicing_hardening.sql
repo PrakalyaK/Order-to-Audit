@@ -25,7 +25,7 @@ BEGIN
                 OLD.order_number, NEW.status;
         END IF;
 
-        IF OLD.status = 'invoiced' AND NEW.status NOT IN ('invoiced', 'dispatched', 'cancelled') THEN
+        IF OLD.status = 'invoiced' AND NEW.status NOT IN ('invoiced', 'dispatched', 'cancelled', 'approved') THEN
             RAISE EXCEPTION 'Integrity Violation: Cannot revert invoiced sales order % to status "%".',
                 OLD.order_number, NEW.status;
         END IF;

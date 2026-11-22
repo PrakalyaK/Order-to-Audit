@@ -254,7 +254,7 @@ export const invoicesRepository = {
         invoiceData.sgst_amount,
         invoiceData.igst_amount,
         invoiceData.total_invoice_value,
-        invoiceData.status || 'posted',
+        'draft',
         invoiceData.approved_by,
       ]);
 
@@ -307,8 +307,18 @@ export const invoicesRepository = {
         createdItems.push(itemRes.rows[0]);
       }
 
+      // Transition to final status (e.g. 'posted') once line items are inserted
+      const finalStatus = invoiceData.status || 'posted';
+      if (finalStatus !== 'draft') {
+        await activeClient.query(
+          `UPDATE invoices SET status = $1 WHERE id = $2;`,
+          [finalStatus, createdInvoice.id]
+        );
+        createdInvoice.status = finalStatus;
+      }
+
       // If invoice is posted, update sales order status to 'invoiced'
-      if (createdInvoice.status === 'posted') {
+      if (finalStatus === 'posted') {
         await activeClient.query(
           `UPDATE sales_orders SET status = 'invoiced', updated_at = NOW() WHERE id = $1;`,
           [createdInvoice.sales_order_id]
