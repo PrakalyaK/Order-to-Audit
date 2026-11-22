@@ -329,7 +329,7 @@ BEGIN
     END IF;
 
     INSERT INTO audit_logs (
-        timestamp,
+        created_at,
         user_id,
         action,
         entity_name,

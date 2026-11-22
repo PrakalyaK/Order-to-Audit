@@ -1,0 +1,20 @@
+/**
+ * Sales Orders Constants
+ */
+export const SALES_ORDER_STATUS = {
+  SUBMITTED: 'submitted',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  INVOICED: 'invoiced',
+  DISPATCHED: 'dispatched',
+  CANCELLED: 'cancelled',
+};
+
+export const VALID_SALES_ORDER_STATUSES = [
+  SALES_ORDER_STATUS.SUBMITTED,
+  SALES_ORDER_STATUS.APPROVED,
+  SALES_ORDER_STATUS.REJECTED,
+  SALES_ORDER_STATUS.INVOICED,
+  SALES_ORDER_STATUS.DISPATCHED,
+  SALES_ORDER_STATUS.CANCELLED,
+];

@@ -37,6 +37,9 @@
 \echo '>>> Applying Migration 007: Purchases Immutability & Inventory Hardening...'
 \i database/migrations/007_purchases_and_inventory_hardening.sql
 
+\echo '>>> Applying Migration 008: Sales, Dispatch & Invoicing Hardening & Audit Trail...'
+\i database/migrations/008_sales_dispatch_invoicing_hardening.sql
+
 \echo '>>> Seeding Benchmark Scenario Data via Atomic Posting Functions...'
 \i database/seeds/benchmark_seed.sql
 

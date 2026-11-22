@@ -40,4 +40,5 @@ export const env = {
   bcrypt: {
     saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10,
   },
+  factoryStateCode: process.env.FACTORY_STATE_CODE || '33',
 };

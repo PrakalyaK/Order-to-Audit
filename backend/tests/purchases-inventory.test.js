@@ -11,11 +11,11 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   let baseUrl;
 
   // Real benchmark user IDs from order_to_audit
-  const ownerId = '11111111-1111-1111-1111-111111111111';
-  const adminId = '22222222-2222-2222-2222-222222222222';
-  const supervisorId = '33333333-3333-3333-3333-333333333333';
-  const salesmanId = '55555555-5555-5555-5555-555555555555';
-  const auditorId = '66666666-6666-6666-6666-666666666666';
+  const ownerId = '66666666-6666-6666-6666-666666666666'; // owner_main (owner)
+  const adminId = '33333333-3333-3333-3333-333333333333'; // admin_factory (factory_admin)
+  const supervisorId = '44444444-4444-4444-4444-444444444444'; // supervisor_floor (production_supervisor)
+  const salesmanId = '11111111-1111-1111-1111-111111111111'; // salesman_a (salesman)
+  const auditorId = '55555555-5555-5555-5555-555555555555'; // auditor_ext (auditor)
 
   const supplierId = '99999999-9999-9999-9999-999999999999'; // Trichy Agro Supplies
   const customerId = '77777777-7777-7777-7777-777777777777'; // Retailer A
@@ -30,6 +30,17 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
   const supervisorToken = jwt.sign({ sub: supervisorId, username: 'supervisor_user', role: ROLES.PRODUCTION_SUPERVISOR }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
   const salesmanToken = jwt.sign({ sub: salesmanId, username: 'sales_user', role: ROLES.SALESMAN }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
   const auditorToken = jwt.sign({ sub: auditorId, username: 'auditor_user', role: ROLES.AUDITOR }, env.jwt.secret, { algorithm: 'HS256', expiresIn: '1h' });
+
+  // Clean any test residue from previous runs safely
+  const preClient = await getClient();
+  try {
+    await preClient.query('SET session_replication_role = replica');
+    await preClient.query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
+    await preClient.query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id NOT IN ('ba000001-0000-0000-0000-000000000001')`);
+    await preClient.query(`DELETE FROM purchase_bills WHERE id NOT IN ('ba000001-0000-0000-0000-000000000001')`);
+  } finally {
+    preClient.release();
+  }
 
   // Snapshot initial counts
   const initialCountsRes = await query(`
@@ -471,8 +482,8 @@ test('Order-to-Audit: Phase 5 Purchases & Inventory Management Integration Tests
     // Clean up ledger entries created by test
     await query(`DELETE FROM inventory_ledger WHERE source_reference_label = 'TEST-BILL-001'`);
     // Clean up test purchase bill items and bill
-    await query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id = $1`, [createdPurchaseBillId]);
-    await query(`DELETE FROM purchase_bills WHERE id = $1`, [createdPurchaseBillId]);
+    await query(`DELETE FROM purchase_bill_items WHERE purchase_bill_id NOT IN ('ba000001-0000-0000-0000-000000000001')`);
+    await query(`DELETE FROM purchase_bills WHERE id NOT IN ('ba000001-0000-0000-0000-000000000001')`);
 
     // Restore Flour and Oil stock balance to pristine benchmark state
     // (Benchmark: Flour 160.0000 kg @ ₹43.1250, value ₹6,900.00; Oil 40.0000 L @ ₹100.0000, value ₹4,000.00)
