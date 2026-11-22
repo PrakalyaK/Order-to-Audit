@@ -230,7 +230,12 @@ export const inventoryRepository = {
     );
     const bookQty = Number(balRes.rows[0]?.current_base_qty) || 0;
     const wac = Number(balRes.rows[0]?.current_moving_wac) || 0;
-    const diffQty = Number(data.physical_quantity) - bookQty;
+    const physicalQty = data.physical_quantity !== undefined
+      ? Number(data.physical_quantity)
+      : data.physical_count !== undefined
+        ? Number(data.physical_count)
+        : (bookQty + Number(data.discrepancy_quantity || 0));
+    const diffQty = physicalQty - bookQty;
     const totalCost = Math.round(diffQty * wac * 100) / 100;
 
     const res = await db.query(
@@ -255,7 +260,7 @@ export const inventoryRepository = {
         data.adjustment_date,
         data.item_id,
         bookQty,
-        data.physical_quantity,
+        physicalQty,
         data.reason,
         data.adjustment_type || 'physical_count',
         data.batch_number || null,

@@ -24,15 +24,30 @@ router.get(
   authorizeRoles(...VIEW_ROLES),
   controller.getPayablesSummary
 );
+router.get(
+  '/summary',
+  authorizeRoles(...VIEW_ROLES),
+  controller.getPayablesSummary
+);
 
 router.get(
   '/payables/suppliers',
   authorizeRoles(...VIEW_ROLES),
   controller.getSupplierOutstanding
 );
+router.get(
+  '/outstanding',
+  authorizeRoles(...VIEW_ROLES),
+  controller.getSupplierOutstanding
+);
 
 router.get(
   '/payables/bills',
+  authorizeRoles(...VIEW_ROLES),
+  controller.getPurchaseBillBalances
+);
+router.get(
+  '/bills',
   authorizeRoles(...VIEW_ROLES),
   controller.getPurchaseBillBalances
 );

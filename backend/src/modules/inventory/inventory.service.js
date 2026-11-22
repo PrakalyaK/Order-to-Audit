@@ -166,62 +166,51 @@ export const inventoryService = {
         const isFg = updatedAdj.item_type === 'finished_good';
         const invAccountCode = isFg ? '1330' : '1310'; // 1330 FG, 1310 Raw Materials
 
-        const client = await getClient();
-        try {
-          await client.query('BEGIN');
+        let lines;
+        let narration;
 
-          const invAccRes = await client.query('SELECT id FROM chart_of_accounts WHERE account_code = $1', [invAccountCode]);
-          const lossAccRes = await client.query('SELECT id FROM chart_of_accounts WHERE account_code = $1', ['6450']); // Inventory Write-Off & Stock Loss
-          const incomeAccRes = await client.query('SELECT id FROM chart_of_accounts WHERE account_code = $1', ['4200']); // Other Operating Income
+        if (delta < 0) {
+          // Write-off / Loss: DR Loss Expense, CR Inventory
+          lines = [
+            {
+              account_code: '6450', // Inventory Write-Off & Stock Loss
+              debit_amount: totalCost,
+              credit_amount: 0,
+              description: `Stock adjustment write-off: ${updatedAdj.adjustment_number} (${updatedAdj.reason || 'Inventory Loss'})`,
+            },
+            {
+              account_code: invAccountCode,
+              debit_amount: 0,
+              credit_amount: totalCost,
+              description: `Inventory reduction for ${updatedAdj.item_name} (${updatedAdj.adjustment_number})`,
+            },
+          ];
+          narration = `Stock Write-Off: ${updatedAdj.adjustment_number} (${updatedAdj.reason || 'Adjustment'})`;
+        } else {
+          // Gain / Surplus: DR Inventory, CR Other Operating Income
+          lines = [
+            {
+              account_code: invAccountCode,
+              debit_amount: totalCost,
+              credit_amount: 0,
+              description: `Inventory surplus for ${updatedAdj.item_name} (${updatedAdj.adjustment_number})`,
+            },
+            {
+              account_code: '4200', // Other Operating Income
+              debit_amount: 0,
+              credit_amount: totalCost,
+              description: `Surplus adjustment income: ${updatedAdj.adjustment_number}`,
+            },
+          ];
+          narration = `Stock Surplus Gain: ${updatedAdj.adjustment_number} (${updatedAdj.reason || 'Adjustment'})`;
+        }
 
-          const invAccId = invAccRes.rows[0].id;
-          const lossAccId = lossAccRes.rows[0]?.id;
-          const incomeAccId = incomeAccRes.rows[0].id;
+        const entryDate = updatedAdj.adjustment_date
+          ? new Date(updatedAdj.adjustment_date).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0];
 
-          let lines;
-          let narration;
-
-          if (delta < 0) {
-            // Write-off / Loss: DR Loss Expense, CR Inventory
-            lines = [
-              {
-                account_id: lossAccId,
-                debit_amount: totalCost,
-                credit_amount: 0,
-                description: `Stock adjustment write-off: ${updatedAdj.adjustment_number} (${updatedAdj.reason})`,
-              },
-              {
-                account_id: invAccId,
-                debit_amount: 0,
-                credit_amount: totalCost,
-                description: `Inventory reduction for ${updatedAdj.item_name} (${updatedAdj.adjustment_number})`,
-              },
-            ];
-            narration = `Stock Write-Off: ${updatedAdj.adjustment_number} (${updatedAdj.reason})`;
-          } else {
-            // Gain / Surplus: DR Inventory, CR Other Operating Income
-            lines = [
-              {
-                account_id: invAccId,
-                debit_amount: totalCost,
-                credit_amount: 0,
-                description: `Inventory surplus for ${updatedAdj.item_name} (${updatedAdj.adjustment_number})`,
-              },
-              {
-                account_id: incomeAccId,
-                debit_amount: 0,
-                credit_amount: totalCost,
-                description: `Surplus adjustment income: ${updatedAdj.adjustment_number}`,
-              },
-            ];
-            narration = `Stock Surplus Gain: ${updatedAdj.adjustment_number} (${updatedAdj.reason})`;
-          }
-
-          const entryDate = updatedAdj.adjustment_date
-            ? new Date(updatedAdj.adjustment_date).toISOString().split('T')[0]
-            : new Date().toISOString().split('T')[0];
-
-          await accountingService.createJournalEntry({
+        await accountingService.createJournalEntry(
+          {
             entry_date: entryDate,
             source_type: 'STOCK_ADJUSTMENT',
             source_id: updatedAdj.id,
@@ -229,18 +218,12 @@ export const inventoryService = {
             narration,
             post_immediately: true,
             lines,
-          }, user);
-
-          await client.query('COMMIT');
-        } catch (e) {
-          await client.query('ROLLBACK');
-          console.error('Accounting posting for stock adjustment skipped or failed:', e.message);
-        } finally {
-          client.release();
-        }
+          },
+          user
+        );
       }
     } catch (err) {
-      console.error('Accounting integration error:', err.message);
+      console.error('Accounting integration error on stock adjustment:', err.message);
     }
 
     return updatedAdj;

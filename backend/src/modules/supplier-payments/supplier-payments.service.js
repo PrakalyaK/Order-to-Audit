@@ -12,8 +12,13 @@ class SupplierPaymentsService {
 
       const paymentNumber = await supplierPaymentsRepository.generatePaymentNumber(data.payment_date, client);
 
+      const totalAmount = roundMoney(data.total_amount !== undefined ? data.total_amount : data.amount);
+      const referenceTxnId = data.reference_txn_id || data.reference_number || null;
+
       const payment = await supplierPaymentsRepository.createPayment({
         ...data,
+        total_amount: totalAmount,
+        reference_txn_id: referenceTxnId,
         payment_number: paymentNumber,
         recorded_by: user.id,
       }, client);
@@ -141,19 +146,74 @@ class SupplierPaymentsService {
 
       const payment = await supplierPaymentsRepository.reversePayment(paymentId, user.id, data.reversal_reason, client);
 
-      // Reversal accounting integration
+      // Reversal accounting integration: create reversing entry with source_type 'SUPPLIER_PAYMENT_REVERSAL'
       const origJeRes = await client.query(
-        `SELECT id, reversal_entry_id FROM journal_entries 
+        `SELECT id, total_debit, total_credit FROM journal_entries 
          WHERE source_type = 'SUPPLIER_PAYMENT' AND source_id = $1 AND status = 'posted'`,
         [paymentId]
       );
 
-      if (origJeRes.rows.length > 0 && !origJeRes.rows[0].reversal_entry_id) {
-        await client.query(`SELECT fn_reverse_journal_entry($1, $2, $3)`, [
-          origJeRes.rows[0].id,
-          user.id,
-          data.reversal_reason,
-        ]);
+      if (origJeRes.rows.length > 0) {
+        const origJe = origJeRes.rows[0];
+        const linesRes = await client.query(
+          `SELECT account_id, debit_amount, credit_amount, party_id, description 
+           FROM journal_entry_lines WHERE journal_entry_id = $1 ORDER BY line_number ASC`,
+          [origJe.id]
+        );
+
+        const revLines = linesRes.rows.map((l) => ({
+          account_id: l.account_id,
+          debit_amount: Number(l.credit_amount), // Swap debit and credit
+          credit_amount: Number(l.debit_amount),
+          party_id: l.party_id,
+          description: `Reversal: ${l.description || 'Payment reversal'}`,
+        }));
+
+        const revEntryNumber = await accountingRepository.generateEntryNumber(new Date(), client);
+
+        const revJeRes = await client.query(
+          `INSERT INTO journal_entries (
+            entry_number, entry_date, accounting_date, source_type, source_id, source_reference,
+            narration, total_debit, total_credit, status, posted_at, posted_by, reversal_reason
+          ) VALUES ($1, CURRENT_DATE, CURRENT_DATE, 'SUPPLIER_PAYMENT_REVERSAL', $2, $3, $4, $5, $6, 'posted', NOW(), $7, $8)
+          RETURNING id`,
+          [
+            revEntryNumber,
+            paymentId,
+            payment.payment_number,
+            `Reversal of supplier payment ${payment.payment_number}: ${data.reversal_reason}`,
+            origJe.total_credit,
+            origJe.total_debit,
+            user.id,
+            data.reversal_reason,
+          ]
+        );
+
+        const revJeId = revJeRes.rows[0].id;
+        for (let i = 0; i < revLines.length; i++) {
+          await client.query(
+            `INSERT INTO journal_entry_lines (
+              journal_entry_id, account_id, line_number, debit_amount, credit_amount, description, party_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              revJeId,
+              revLines[i].account_id,
+              i + 1,
+              revLines[i].debit_amount,
+              revLines[i].credit_amount,
+              revLines[i].description,
+              revLines[i].party_id,
+            ]
+          );
+        }
+
+        // Mark original entry as reversed and link reversal
+        await client.query(
+          `UPDATE journal_entries 
+           SET status = 'reversed', reversed_at = NOW(), reversed_by = $1, reversal_entry_id = $2, reversal_reason = $3
+           WHERE id = $4`,
+          [user.id, revJeId, data.reversal_reason, origJe.id]
+        );
       }
 
       await client.query('COMMIT');

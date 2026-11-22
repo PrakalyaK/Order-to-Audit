@@ -92,6 +92,17 @@ router.get(
 );
 
 router.get(
+  '/adjustments/discrepancy-report',
+  authorizeRoles(
+    ROLES.OWNER,
+    ROLES.FACTORY_ADMIN,
+    ROLES.PRODUCTION_SUPERVISOR,
+    ROLES.AUDITOR
+  ),
+  inventoryController.getDiscrepancies
+);
+
+router.get(
   '/adjustments',
   authorizeRoles(
     ROLES.OWNER,

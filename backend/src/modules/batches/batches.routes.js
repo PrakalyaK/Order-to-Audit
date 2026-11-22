@@ -26,6 +26,13 @@ router.get(
 );
 
 router.get(
+  '/stock',
+  authorizeRoles(...VIEW_ROLES),
+  validate(queryBatchesSchema, 'query'),
+  controller.getBatches
+);
+
+router.get(
   '/near-expiry',
   authorizeRoles(...VIEW_ROLES),
   controller.getNearExpiry
@@ -42,6 +49,18 @@ router.get(
   authorizeRoles(...VIEW_ROLES),
   validate(fefoQuerySchema, 'query'),
   controller.getFefo
+);
+
+router.post(
+  '/allocate',
+  authorizeRoles(...VIEW_ROLES),
+  controller.postFefoAllocation
+);
+
+router.post(
+  '/fefo',
+  authorizeRoles(...VIEW_ROLES),
+  controller.postFefoAllocation
 );
 
 router.get(

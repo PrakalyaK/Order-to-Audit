@@ -4,7 +4,8 @@ import { SUPPLIER_PAYMENT_MODES, SUPPLIER_PAYMENT_STATUS } from './supplier-paym
 export const createSupplierPaymentSchema = z.object({
   supplier_id: z.string({ required_error: 'supplier_id is required' }).uuid('Invalid supplier_id UUID'),
   payment_date: z.string({ required_error: 'payment_date is required' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'payment_date must be in YYYY-MM-DD format'),
-  total_amount: z.coerce.number().positive('total_amount must be strictly greater than 0'),
+  total_amount: z.coerce.number().positive('total_amount must be strictly greater than 0').optional(),
+  amount: z.coerce.number().positive('amount must be strictly greater than 0').optional(),
   payment_mode: z.enum([
     SUPPLIER_PAYMENT_MODES.CASH,
     SUPPLIER_PAYMENT_MODES.UPI,
@@ -13,6 +14,7 @@ export const createSupplierPaymentSchema = z.object({
     SUPPLIER_PAYMENT_MODES.CHEQUE,
     SUPPLIER_PAYMENT_MODES.LEGACY_RECONCILIATION,
   ]),
+  reference_number: z.string().trim().max(100).optional().nullable(),
   reference_txn_id: z.string().trim().max(100).optional().nullable(),
   bank_name: z.string().trim().max(100).optional().nullable(),
   bank_branch: z.string().trim().max(100).optional().nullable(),
@@ -24,6 +26,9 @@ export const createSupplierPaymentSchema = z.object({
     purchase_bill_id: z.string().uuid('Invalid purchase_bill_id UUID'),
     allocated_amount: z.coerce.number().positive('allocated_amount must be greater than 0'),
   })).optional().default([]),
+}).refine((data) => data.total_amount !== undefined || data.amount !== undefined, {
+  message: 'total_amount or amount is required',
+  path: ['total_amount'],
 });
 
 export const allocateSupplierPaymentSchema = z.object({

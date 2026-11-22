@@ -121,7 +121,8 @@ class WarehousesRepository {
         warehouse_name,
         COUNT(DISTINCT item_id)::int AS items_in_stock,
         COALESCE(SUM(current_stock_qty), 0.0000) AS total_units,
-        COALESCE(SUM(warehouse_stock_valuation), 0.00) AS total_valuation
+        COALESCE(SUM(warehouse_stock_valuation), 0.00) AS total_valuation,
+        COALESCE(SUM(warehouse_stock_valuation), 0.00) AS total_warehouse_valuation
        FROM v_warehouse_stock
        WHERE warehouse_id = $1
        GROUP BY warehouse_id, warehouse_code, warehouse_name`,

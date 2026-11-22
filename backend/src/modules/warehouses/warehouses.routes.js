@@ -76,6 +76,12 @@ router.post(
 // ============================================================================
 
 router.get(
+  '/stock-valuation',
+  authorizeRoles(...VIEW_ROLES),
+  controller.getWarehouses
+);
+
+router.get(
   '/',
   authorizeRoles(...VIEW_ROLES),
   controller.getWarehouses

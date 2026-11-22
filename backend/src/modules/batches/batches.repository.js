@@ -156,8 +156,10 @@ class BatchesRepository {
       is_manufactured_batch: !!productionRun,
       production_run: productionRun,
       raw_material_inputs: rawMaterialInputs,
+      raw_material_batches: rawMaterialInputs,
       supplier_inward_bills: inwardPurchaseBills,
       customer_dispatches: dispRes.rows,
+      dispatches: dispRes.rows,
     };
   }
 }

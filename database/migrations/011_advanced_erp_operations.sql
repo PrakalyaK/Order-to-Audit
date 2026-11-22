@@ -650,7 +650,7 @@ BEGIN
 
     v_delta := v_adj.discrepancy_quantity;
     v_unit_cost := v_bal.current_moving_wac;
-    v_total_cost := ROUND(v_delta * v_unit_cost, 2);
+    v_total_cost := ROUND(ABS(v_delta) * v_unit_cost, 2);
 
     IF v_delta < 0 AND (v_bal.current_base_qty + v_delta) < 0 THEN
         RAISE EXCEPTION 'Stock adjustment rejected: Insufficient stock. Current stock (%) cannot support adjustment reduction (%).',

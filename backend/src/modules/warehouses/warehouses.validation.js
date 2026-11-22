@@ -33,11 +33,12 @@ export const createTransferSchema = z.object({
   destination_warehouse_id: z.string({ required_error: 'destination_warehouse_id is required' }).uuid(),
   transfer_date: z.string({ required_error: 'transfer_date is required' }).regex(/^\d{4}-\d{2}-\d{2}$/),
   notes: z.string().trim().max(500).optional().nullable(),
+  reason: z.string().trim().max(500).optional().nullable(),
   items: z.array(z.object({
     item_id: z.string().uuid(),
     batch_number: z.string().trim().optional().nullable(),
     requested_qty: z.coerce.number().positive('requested_qty must be greater than 0'),
-    uom_id: z.string().trim().min(1),
+    uom_id: z.string().trim().min(1).optional().nullable(),
   })).min(1, 'Transfer must include at least one item'),
 }).refine(
   (data) => data.source_warehouse_id !== data.destination_warehouse_id,

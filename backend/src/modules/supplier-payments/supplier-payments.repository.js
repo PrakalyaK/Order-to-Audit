@@ -112,8 +112,11 @@ class SupplierPaymentsRepository {
 
     return {
       ...payment,
+      amount: roundMoney(Number(payment.total_amount)),
       total_allocated_amount: roundMoney(totalAllocated),
+      allocated_amount: roundMoney(totalAllocated),
       unallocated_advance_amount: roundMoney(Number(payment.total_amount) - totalAllocated),
+      unallocated_amount: roundMoney(Number(payment.total_amount) - totalAllocated),
       allocations: allocRes.rows,
     };
   }
@@ -220,7 +223,9 @@ class SupplierPaymentsRepository {
     const res = await db.query(`
       SELECT 
         COALESCE(SUM(total_billed_amount), 0.00) AS total_billed,
+        COALESCE(SUM(total_billed_amount), 0.00) AS total_billed_amount,
         COALESCE(SUM(total_paid_amount), 0.00) AS total_paid,
+        COALESCE(SUM(total_paid_amount), 0.00) AS total_paid_amount,
         COALESCE(SUM(current_outstanding), 0.00) AS total_outstanding,
         COALESCE(SUM(unallocated_advances), 0.00) AS total_unallocated_advances,
         COALESCE(SUM(net_payable_balance), 0.00) AS total_net_payable

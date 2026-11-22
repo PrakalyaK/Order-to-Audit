@@ -40,7 +40,10 @@ export const checkAvailabilitySchema = z.object({
 export const createStockAdjustmentSchema = z.object({
   item_id: z.string({ required_error: 'item_id is required' }).uuid('item_id must be a valid UUID'),
   adjustment_date: z.string({ required_error: 'adjustment_date is required' }).regex(/^\d{4}-\d{2}-\d{2}$/, 'adjustment_date must be in YYYY-MM-DD format'),
-  physical_quantity: z.coerce.number().min(0, 'physical_quantity must be non-negative'),
+  physical_quantity: z.coerce.number().min(0, 'physical_quantity must be non-negative').optional(),
+  physical_count: z.coerce.number().min(0, 'physical_count must be non-negative').optional(),
+  recorded_count: z.coerce.number().optional(),
+  discrepancy_quantity: z.coerce.number().optional(),
   adjustment_type: z.enum([
     'physical_count',
     'damage_write_off',
@@ -51,6 +54,9 @@ export const createStockAdjustmentSchema = z.object({
   batch_number: z.string().trim().optional().nullable(),
   warehouse_id: z.string().uuid().optional().nullable(),
   reason: z.string({ required_error: 'reason is required' }).trim().min(3, 'reason must be at least 3 characters').max(500),
+}).refine((data) => data.physical_quantity !== undefined || data.physical_count !== undefined || data.discrepancy_quantity !== undefined, {
+  message: 'physical_quantity or physical_count is required',
+  path: ['physical_quantity'],
 });
 
 export const queryAdjustmentsSchema = z.object({

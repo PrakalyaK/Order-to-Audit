@@ -44,9 +44,14 @@ class BatchesService {
     return {
       item_id: itemId,
       requested_quantity: Number(requestedQty),
+      requested_qty: Number(requestedQty),
       total_allocated_quantity: totalAllocated,
+      allocated_qty: totalAllocated,
       shortfall_quantity: remainingNeeded > 0 ? remainingNeeded : 0,
+      shortfall_qty: remainingNeeded > 0 ? remainingNeeded : 0,
       can_fulfill: remainingNeeded <= 0,
+      is_sufficient: remainingNeeded <= 0,
+      batches: allocations,
       fefo_allocations: allocations,
     };
   }

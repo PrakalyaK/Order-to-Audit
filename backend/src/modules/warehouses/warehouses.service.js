@@ -80,13 +80,38 @@ class WarehousesService {
 
       const itemsWithCost = [];
       for (const item of data.items) {
-        // Resolve conversion to base quantity
+        // Resolve UOM and conversion to base quantity
+        let uomId = item.uom_id;
+        if (!uomId) {
+          const itemRow = await client.query(`SELECT base_uom_id FROM items WHERE id = $1`, [item.item_id]);
+          if (!itemRow.rows[0]) {
+            const err = new Error(`Item ${item.item_id} not found`);
+            err.statusCode = 404;
+            throw err;
+          }
+          uomId = itemRow.rows[0].base_uom_id;
+        }
+
         const uomRes = await client.query(`SELECT fn_compute_base_quantity($1, $2, $3) AS base_qty`, [
           item.item_id,
           item.requested_qty,
-          item.uom_id,
+          uomId,
         ]);
         const baseQty = Number(uomRes.rows[0].base_qty);
+
+        // Check source warehouse stock availability
+        const stockRes = await client.query(
+          `SELECT current_stock_qty FROM v_warehouse_stock WHERE warehouse_id = $1 AND item_id = $2`,
+          [data.source_warehouse_id, item.item_id]
+        );
+        const availStock = stockRes.rows[0] ? Number(stockRes.rows[0].current_stock_qty) : 0;
+        if (baseQty > availStock) {
+          const err = new Error(
+            `Insufficient stock in source warehouse: requested ${baseQty}, available ${availStock}`
+          );
+          err.statusCode = 400;
+          throw err;
+        }
 
         // Get current moving WAC
         const balRes = await client.query(`SELECT current_moving_wac FROM item_stock_balances WHERE item_id = $1`, [item.item_id]);
@@ -94,6 +119,7 @@ class WarehousesService {
 
         itemsWithCost.push({
           ...item,
+          uom_id: uomId,
           base_quantity: baseQty,
           unit_cost: wac,
           total_cost: roundMoney(baseQty * wac),
@@ -103,6 +129,7 @@ class WarehousesService {
       const transfer = await warehousesRepository.createTransfer(
         {
           ...data,
+          notes: data.notes || data.reason || null,
           transfer_number: transferNumber,
           requested_by: user.id,
         },
