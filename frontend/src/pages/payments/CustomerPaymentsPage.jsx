@@ -64,15 +64,16 @@ export const CustomerPaymentsPage = () => {
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     try {
+      const mode = form.payment_method === 'bank' ? 'bank_transfer' : (form.payment_method || 'bank_transfer');
       const payload = {
-        customer_id: form.customer_id,
-        payment_date: form.payment_date,
-        amount: Number(form.amount),
-        payment_method: form.payment_method,
-        reference_number: form.reference_number || undefined,
+        customerId: form.customer_id,
+        paymentDate: form.payment_date,
+        totalAmount: Number(form.amount),
+        paymentMode: mode,
+        referenceTxnId: form.reference_number || undefined,
         notes: form.notes,
         allocations: form.invoice_id
-          ? [{ invoice_id: form.invoice_id, amount: Number(form.allocated_amount || form.amount) }]
+          ? [{ invoiceId: form.invoice_id, amount: Number(form.allocated_amount || form.amount) }]
           : undefined,
       };
       await api.post('/payments', payload);
@@ -85,7 +86,7 @@ export const CustomerPaymentsPage = () => {
   };
 
   const handleReversePayment = async (payment) => {
-    const reason = window.prompt(`Enter reason for reversing payment ${payment.reference_number || payment.id}:`);
+    const reason = window.prompt(`Enter reason for reversing payment ${payment.receipt_number || payment.reference_number || payment.id}:`);
     if (!reason) return;
     try {
       await api.post(`/payments/${payment.id}/reverse`, { reason });
@@ -99,7 +100,7 @@ export const CustomerPaymentsPage = () => {
   const handleOpenAllocate = (payment) => {
     setSelectedPayment(payment);
     const unallocated =
-      parseFloat(payment.amount || 0) - parseFloat(payment.allocated_amount || 0);
+      parseFloat(payment.amount || payment.total_amount || 0) - parseFloat(payment.allocated_amount || 0);
     setAllocForm({
       invoice_id: '',
       allocated_amount: unallocated > 0 ? unallocated : 0,
@@ -111,7 +112,7 @@ export const CustomerPaymentsPage = () => {
     e.preventDefault();
     try {
       await api.post(`/payments/${selectedPayment.id}/allocate`, {
-        invoice_id: allocForm.invoice_id,
+        invoiceId: allocForm.invoice_id,
         amount: Number(allocForm.allocated_amount),
       });
       alert('Advance payment allocated to invoice successfully.');

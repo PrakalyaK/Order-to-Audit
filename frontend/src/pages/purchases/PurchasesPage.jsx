@@ -115,13 +115,17 @@ export const PurchasesPage = () => {
         warehouse_id: form.warehouse_id || warehouses[0]?.id,
         bill_number: form.bill_number,
         bill_date: form.bill_date,
-        items: form.items.map((i) => ({
-          item_id: i.item_id,
-          quantity: Number(i.quantity),
-          rate: Number(i.rate),
-          batch_number: i.batch_number || undefined,
-          expiry_date: i.expiry_date || undefined,
-        })),
+        items: form.items.map((i) => {
+          const itemMaster = items.find((itm) => itm.id === i.item_id);
+          return {
+            item_id: i.item_id,
+            quantity: Number(i.quantity),
+            uom_id: (i.uom_id || itemMaster?.base_uom_id || 'KG').toUpperCase(),
+            unit_rate: Number(i.rate || i.unit_rate),
+            supplier_batch_no: i.batch_number || i.supplier_batch_no || undefined,
+            expiry_date: i.expiry_date || undefined,
+          };
+        }),
       };
       await api.post('/purchases', payload);
       setCreateModalOpen(false);

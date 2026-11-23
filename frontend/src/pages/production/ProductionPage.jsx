@@ -64,12 +64,9 @@ export const ProductionPage = () => {
   const handleCreateRun = async (e) => {
     e.preventDefault();
     try {
-      const selectedBom = boms.find((b) => b.id === createForm.bom_id);
       const payload = {
-        item_id: selectedBom?.item_id || selectedBom?.finished_good_id,
         bom_id: createForm.bom_id,
-        warehouse_id: createForm.warehouse_id || warehouses[0]?.id,
-        planned_batch_count: Number(createForm.planned_batch_count),
+        planned_batch_count: Number(createForm.planned_batch_count || 1.0),
         run_date: createForm.run_date,
       };
       await api.post('/production', payload);
@@ -83,23 +80,19 @@ export const ProductionPage = () => {
 
   const handleStartWorkflow = async (run) => {
     try {
-      if (run.status === 'DRAFT') {
-        await api.post(`/production/${run.id}/release`);
-      }
-      await api.post(`/production/${run.id}/start`);
-      alert('Production run started and moved to IN_PROGRESS!');
+      await api.post(`/production/${run.id}/issue`);
+      alert('Raw materials issued to factory floor! Status: materials_issued');
       fetchData();
     } catch (err) {
-      alert(`Workflow transition failed: ${err.message}`);
+      alert(`Issue materials failed: ${err.message}`);
     }
   };
 
   const handleOpenComplete = (run) => {
     setSelectedRun(run);
     setCompleteForm({
-      actual_output_qty: run.planned_output_qty || 200,
+      actual_output_qty: run.planned_yield_qty || run.planned_output_qty || 200,
       actual_scrap_qty: 0,
-      actual_byproduct_qty: 0,
       labour_cost: 250,
       overhead_cost: 150,
       notes: 'Quality checked and approved',
@@ -111,14 +104,14 @@ export const ProductionPage = () => {
     e.preventDefault();
     try {
       const payload = {
-        actual_output_qty: Number(completeForm.actual_output_qty),
-        actual_scrap_qty: Number(completeForm.actual_scrap_qty),
-        actual_byproduct_qty: Number(completeForm.actual_byproduct_qty),
-        labour_cost: Number(completeForm.labour_cost),
-        overhead_cost: Number(completeForm.overhead_cost),
-        notes: completeForm.notes,
+        actual_good_output_qty: Number(completeForm.actual_output_qty),
+        actual_scrap_output_qty: Number(completeForm.actual_scrap_qty || 0),
+        overheads: [
+          ...(Number(completeForm.labour_cost) > 0 ? [{ overhead_name: 'Factory Labor', amount: Number(completeForm.labour_cost) }] : []),
+          ...(Number(completeForm.overhead_cost) > 0 ? [{ overhead_name: 'Factory Electricity & Power', amount: Number(completeForm.overhead_cost) }] : []),
+        ],
       };
-      await api.post(`/production/${selectedRun.id}/complete`, payload);
+      await api.post(`/production/${selectedRun.id}/yield`, payload);
       alert('Production run COMPLETED. Finished goods received into stock with Moving WAC unit costing.');
       setCompleteModalOpen(false);
       fetchData();
@@ -140,14 +133,16 @@ export const ProductionPage = () => {
   };
 
   const getStatusBadge = (status) => {
-    switch (status) {
-      case 'COMPLETED':
+    const s = (status || '').toLowerCase();
+    switch (s) {
+      case 'completed':
         return <Badge variant="success">COMPLETED</Badge>;
-      case 'IN_PROGRESS':
-        return <Badge variant="warning">IN PROGRESS</Badge>;
-      case 'RELEASED':
+      case 'materials_issued':
+      case 'in_progress':
+        return <Badge variant="warning">MATERIALS ISSUED</Badge>;
+      case 'released':
         return <Badge variant="primary">RELEASED</Badge>;
-      case 'DRAFT':
+      case 'draft':
         return <Badge variant="default">DRAFT</Badge>;
       default:
         return <Badge>{status}</Badge>;
@@ -219,24 +214,24 @@ export const ProductionPage = () => {
                         >
                           Costing
                         </Button>
-                        {canManage && (r.status === 'DRAFT' || r.status === 'RELEASED') && (
+                        {canManage && (r.status?.toLowerCase() === 'draft') && (
                           <Button
                             variant="primary"
                             size="sm"
                             icon={Play}
                             onClick={() => handleStartWorkflow(r)}
                           >
-                            Start
+                            Issue
                           </Button>
                         )}
-                        {canManage && r.status === 'IN_PROGRESS' && (
+                        {canManage && (r.status?.toLowerCase() === 'materials_issued' || r.status?.toLowerCase() === 'in_progress') && (
                           <Button
                             variant="primary"
                             size="sm"
                             icon={CheckCircle2}
                             onClick={() => handleOpenComplete(r)}
                           >
-                            Complete
+                            Yield
                           </Button>
                         )}
                       </div>

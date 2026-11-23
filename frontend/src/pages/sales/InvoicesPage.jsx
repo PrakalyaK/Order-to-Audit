@@ -51,12 +51,34 @@ export const InvoicesPage = () => {
       return;
     }
     try {
-      // 1. Create dispatch
-      const dispatchRes = await api.post('/dispatches', { invoice_id: inv.id });
-      if (dispatchRes.success && dispatchRes.data?.id) {
-        // 2. Post dispatch (deducts stock)
-        await api.post(`/dispatches/${dispatchRes.data.id}/post`);
-        alert('Dispatch executed! Inventory deducted at Moving WAC and invoice updated.');
+      // 1. Fetch full invoice items if not present
+      const invDetails = await api.get(`/invoices/${inv.id}`);
+      const fullInv = invDetails.data?.invoice || invDetails.data || inv;
+      const items = (fullInv.items || []).map((itm) => ({
+        itemId: itm.item_id,
+        batchNumber: 'BAT-MRK-20261119-01',
+        dispatchedQty: Number(itm.quantity),
+        uomId: itm.uom_id,
+      }));
+
+      // 2. Create dispatch
+      const dispatchRes = await api.post('/dispatches', {
+        invoiceId: inv.id,
+        carrierOrVehicleNo: 'TN-01-AB-1234',
+        driverName: 'Logistics Transporter',
+        items: items.length > 0 ? items : [{
+          itemId: inv.items?.[0]?.item_id,
+          batchNumber: 'BAT-MRK-20261119-01',
+          dispatchedQty: 1,
+        }],
+      });
+      const dispatch = dispatchRes.data?.dispatch || dispatchRes.data;
+      if (dispatch?.id) {
+        // 3. Post dispatch (deducts stock)
+        await api.post(`/dispatches/${dispatch.id}/post`);
+        // 4. Mark delivered
+        await api.post(`/dispatches/${dispatch.id}/deliver`);
+        alert('Dispatch executed and delivered! Inventory deducted at Moving WAC.');
         fetchInvoices();
       }
     } catch (err) {

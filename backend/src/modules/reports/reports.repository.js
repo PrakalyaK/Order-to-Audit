@@ -8,52 +8,63 @@ export const reportsRepository = {
     // 1. Sales summary
     const salesRes = await query(`
       SELECT 
-        COALESCE(SUM(total_amount), 0) AS total_sales,
-        COALESCE(SUM(paid_amount), 0) AS total_collected,
-        COUNT(*) AS total_invoices
-      FROM invoices
-      WHERE status != 'cancelled';
+        COALESCE(SUM(inv.total_invoice_value), 0) AS total_sales,
+        COALESCE(SUM(pa.total_allocated), 0) AS total_collected,
+        COUNT(inv.id) AS total_invoices
+      FROM invoices inv
+      LEFT JOIN (
+        SELECT invoice_id, SUM(allocated_amount) AS total_allocated
+        FROM payment_allocations
+        WHERE status = 'active'
+        GROUP BY invoice_id
+      ) pa ON inv.id = pa.invoice_id
+      WHERE inv.status <> 'cancelled';
     `);
 
     // 2. Purchases summary
     const purchaseRes = await query(`
       SELECT 
-        COALESCE(SUM(total_amount), 0) AS total_purchases,
-        COALESCE(SUM(paid_amount), 0) AS total_paid,
-        COUNT(*) AS total_bills
-      FROM purchase_bills
-      WHERE status != 'cancelled';
+        COALESCE(SUM(pb.total_amount), 0) AS total_purchases,
+        COALESCE(SUM(spa.total_allocated), 0) AS total_paid,
+        COUNT(pb.id) AS total_bills
+      FROM purchase_bills pb
+      LEFT JOIN (
+        SELECT purchase_bill_id, SUM(allocated_amount) AS total_allocated
+        FROM supplier_payment_allocations
+        WHERE status = 'active'
+        GROUP BY purchase_bill_id
+      ) spa ON pb.id = spa.purchase_bill_id
+      WHERE pb.status <> 'cancelled';
     `);
 
     // 3. Inventory valuation & alerts
     const invValRes = await query(`
       SELECT 
-        COALESCE(SUM(isb.quantity_on_hand * isb.moving_avg_cost), 0) AS total_valuation,
-        COUNT(DISTINCT isb.item_id) AS distinct_items_count
-      FROM item_stock_balances isb;
+        COALESCE(SUM(current_total_value), 0) AS total_valuation,
+        COUNT(DISTINCT item_id) AS distinct_items_count
+      FROM item_stock_balances;
     `);
 
     const lowStockRes = await query(`
       SELECT COUNT(*) AS low_stock_count
       FROM items i
       LEFT JOIN item_stock_balances isb ON i.id = isb.item_id
-      WHERE COALESCE(isb.quantity_on_hand, 0) <= i.min_reorder_level
+      WHERE COALESCE(isb.current_base_qty, 0) <= i.min_reorder_level
         AND i.is_active = true;
     `);
 
     const nearExpiryRes = await query(`
       SELECT COUNT(*) AS near_expiry_count
       FROM v_batch_stock
-      WHERE expiry_date IS NOT NULL 
-        AND expiry_date <= NOW() + INTERVAL '30 days'
-        AND current_balance > 0;
+      WHERE is_near_expiry = true
+        AND available_qty > 0;
     `);
 
     // 4. Production summary
     const prodRes = await query(`
       SELECT 
-        COUNT(*) FILTER (WHERE status IN ('DRAFT', 'RELEASED', 'IN_PROGRESS')) AS active_runs_count,
-        COUNT(*) FILTER (WHERE status = 'COMPLETED') AS completed_runs_count
+        COUNT(*) FILTER (WHERE status IN ('draft', 'materials_issued')) AS active_runs_count,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed_runs_count
       FROM production_runs;
     `);
 
@@ -70,7 +81,7 @@ export const reportsRepository = {
 
     // 6. Recent Operational Records
     const recentInvoices = await query(`
-      SELECT inv.id, inv.invoice_number, inv.invoice_date, inv.total_amount, inv.status, p.party_name AS customer_name
+      SELECT inv.id, inv.invoice_number, inv.invoice_date, inv.total_invoice_value AS total_amount, inv.status, p.trade_name AS customer_name
       FROM invoices inv
       JOIN parties p ON inv.customer_id = p.id
       ORDER BY inv.created_at DESC
@@ -78,15 +89,15 @@ export const reportsRepository = {
     `);
 
     const recentRuns = await query(`
-      SELECT pr.id, pr.run_number, pr.status, pr.run_date, i.name AS item_name, pr.planned_output_qty, pr.actual_output_qty
+      SELECT pr.id, pr.run_number, pr.status, pr.run_date, i.name AS item_name, pr.planned_yield_qty AS planned_output_qty, pr.actual_good_output_qty AS actual_output_qty
       FROM production_runs pr
-      JOIN items i ON pr.item_id = i.id
+      JOIN items i ON pr.finished_good_item_id = i.id
       ORDER BY pr.created_at DESC
       LIMIT 5;
     `);
 
     const recentBills = await query(`
-      SELECT pb.id, pb.bill_number, pb.bill_date, pb.total_amount, pb.status, p.party_name AS supplier_name
+      SELECT pb.id, pb.bill_number, pb.bill_date, pb.total_amount, pb.status, p.trade_name AS supplier_name
       FROM purchase_bills pb
       JOIN parties p ON pb.supplier_id = p.id
       ORDER BY pb.created_at DESC
@@ -129,17 +140,17 @@ export const reportsRepository = {
   },
 
   async getSalesAnalytics() {
-    const outwardGst = await query('SELECT * FROM v_gst_outward_summary ORDER BY invoice_date DESC LIMIT 50;');
+    const outwardGst = await query('SELECT * FROM v_gst_outward_summary ORDER BY tax_period DESC LIMIT 50;');
     const customerOutstanding = await query('SELECT * FROM v_customer_outstanding ORDER BY net_invoice_receivables DESC;');
     const topItems = await query(`
       SELECT 
         i.name, i.sku,
         SUM(ii.quantity) AS total_quantity_sold,
-        SUM(ii.total_amount) AS total_revenue
+        SUM(ii.total_item_value) AS total_revenue
       FROM invoice_items ii
       JOIN items i ON ii.item_id = i.id
       JOIN invoices inv ON ii.invoice_id = inv.id
-      WHERE inv.status != 'cancelled'
+      WHERE inv.status <> 'cancelled'
       GROUP BY i.id, i.name, i.sku
       ORDER BY total_revenue DESC
       LIMIT 10;
@@ -154,13 +165,13 @@ export const reportsRepository = {
 
   async getInventoryAnalytics() {
     const warehouseStock = await query('SELECT * FROM v_warehouse_stock ORDER BY item_name, warehouse_name;');
-    const batchStock = await query('SELECT * FROM v_batch_stock WHERE current_balance > 0 ORDER BY expiry_date ASC NULLS LAST;');
+    const batchStock = await query('SELECT * FROM v_batch_stock WHERE available_qty > 0 ORDER BY expiry_date ASC NULLS LAST;');
     const stockValuationByCategory = await query(`
       SELECT 
         i.item_type,
         COUNT(i.id) AS items_count,
-        COALESCE(SUM(isb.quantity_on_hand), 0) AS total_units,
-        COALESCE(SUM(isb.quantity_on_hand * isb.moving_avg_cost), 0) AS total_valuation
+        COALESCE(SUM(isb.current_base_qty), 0) AS total_units,
+        COALESCE(SUM(isb.current_total_value), 0) AS total_valuation
       FROM items i
       LEFT JOIN item_stock_balances isb ON i.id = isb.item_id
       GROUP BY i.item_type;
@@ -179,11 +190,11 @@ export const reportsRepository = {
       SELECT 
         pr.id, pr.run_number, pr.run_date, pr.status,
         i.name AS item_name, i.sku,
-        pr.planned_output_qty, pr.actual_output_qty,
-        COALESCE(prc.total_cost, 0) AS total_cost,
-        COALESCE(prc.cost_per_unit, 0) AS cost_per_unit
+        pr.planned_yield_qty AS planned_output_qty, pr.actual_good_output_qty AS actual_output_qty,
+        COALESCE(prc.gross_total_batch_cost, 0) AS total_cost,
+        COALESCE(prc.cost_per_packet, 0) AS cost_per_unit
       FROM production_runs pr
-      JOIN items i ON pr.item_id = i.id
+      JOIN items i ON pr.finished_good_item_id = i.id
       LEFT JOIN production_run_costing prc ON pr.id = prc.production_run_id
       ORDER BY pr.created_at DESC
       LIMIT 50;
@@ -214,11 +225,11 @@ export const reportsRepository = {
         pr.run_number,
         pr.run_date,
         pr.status,
-        pr.actual_output_qty,
+        pr.actual_good_output_qty AS actual_output_qty,
         i.name AS finished_good_name,
         i.sku AS finished_good_sku
       FROM production_runs pr
-      JOIN items i ON pr.item_id = i.id
+      JOIN items i ON pr.finished_good_item_id = i.id
       WHERE pr.output_batch_number = $1;
     `, [batchNumber]);
 
@@ -231,17 +242,11 @@ export const reportsRepository = {
           pri.id,
           i.name AS material_name,
           i.sku AS material_sku,
-          pri.batch_number,
-          pri.quantity_used,
-          pri.uom,
-          pb.bill_number,
-          pb.bill_date,
-          sup.party_name AS supplier_name
+          pri.actual_issued_qty AS quantity_used,
+          u.code AS uom
         FROM production_run_inputs pri
         JOIN items i ON pri.item_id = i.id
-        LEFT JOIN inventory_ledger il ON il.batch_number = pri.batch_number AND il.movement_type = 'PURCHASE_RECEIPT'
-        LEFT JOIN purchase_bills pb ON il.reference_id = pb.id
-        LEFT JOIN parties sup ON pb.supplier_id = sup.id
+        LEFT JOIN units u ON pri.uom_id = u.id
         WHERE pri.production_run_id = $1;
       `, [productionRun.production_run_id]);
       inputs = inputsRes.rows;
@@ -250,7 +255,7 @@ export const reportsRepository = {
     // 2. Check if this batch was received from a purchase bill
     const purchaseRes = await query(`
       SELECT 
-        pb.id, pb.bill_number, pb.bill_date, p.party_name AS supplier_name,
+        pb.id, pb.bill_number, pb.bill_date, p.trade_name AS supplier_name,
         pbi.quantity, pbi.rate, i.name AS item_name, i.sku
       FROM purchase_bill_items pbi
       JOIN purchase_bills pb ON pbi.purchase_bill_id = pb.id
@@ -263,9 +268,9 @@ export const reportsRepository = {
     const dispatchRes = await query(`
       SELECT 
         d.id AS dispatch_id, d.dispatch_number, d.dispatch_date, d.status,
-        di.quantity_dispatched,
+        di.dispatched_qty AS quantity_dispatched,
         inv.invoice_number, inv.invoice_date,
-        c.party_name AS customer_name, c.state_name
+        c.trade_name AS customer_name, c.state_name
       FROM dispatch_items di
       JOIN dispatches d ON di.dispatch_id = d.id
       JOIN invoices inv ON d.invoice_id = inv.id
@@ -276,12 +281,13 @@ export const reportsRepository = {
     // 4. Check inventory ledger movements for this batch
     const ledgerRes = await query(`
       SELECT 
-        il.id, il.movement_type, il.quantity, il.unit_cost, il.reference_type, il.reference_id,
-        il.transaction_date, w.name AS warehouse_name
+        il.id, il.movement_type, il.base_quantity_delta AS quantity, il.unit_cost,
+        il.source_reference_label,
+        il.transaction_timestamp AS transaction_date, w.name AS warehouse_name
       FROM inventory_ledger il
       LEFT JOIN warehouses w ON il.warehouse_id = w.id
       WHERE il.batch_number = $1
-      ORDER BY il.created_at ASC;
+      ORDER BY il.transaction_timestamp ASC;
     `, [batchNumber]);
 
     return {
