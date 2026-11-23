@@ -32,7 +32,7 @@ export const InventoryPage = () => {
     item_id: '',
     physical_count: 0,
     system_count: 0,
-    reason: 'RECONCILIATION',
+    reason: 'physical_count',
     notes: 'Quarterly physical stock audit',
   });
 
@@ -40,17 +40,33 @@ export const InventoryPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [stockRes, batchRes, whRes, itemsRes] = await Promise.all([
-        api.get('/inventory'),
+      const results = await Promise.allSettled([
+        api.get('/inventory/stock'),
         api.get('/batches'),
         api.get('/warehouses'),
         api.get('/items'),
       ]);
 
-      if (stockRes.success) setStock(stockRes.data || []);
-      if (batchRes.success) setBatches(batchRes.data || []);
-      if (whRes.success) setWarehouses(whRes.data || []);
-      if (itemsRes.success) setItems(itemsRes.data || []);
+      const [stockRes, batchRes, whRes, itemsRes] = results.map((r) =>
+        r.status === 'fulfilled' ? r.value : null
+      );
+
+      if (stockRes?.success) {
+        const raw = stockRes.data?.stock || stockRes.data;
+        setStock(Array.isArray(raw) ? raw : []);
+      }
+      if (batchRes?.success) {
+        const raw = batchRes.data?.batches || batchRes.data;
+        setBatches(Array.isArray(raw) ? raw : []);
+      }
+      if (whRes?.success) {
+        const raw = whRes.data?.warehouses || whRes.data;
+        setWarehouses(Array.isArray(raw) ? raw : []);
+      }
+      if (itemsRes?.success) {
+        const raw = itemsRes.data?.items || itemsRes.data;
+        setItems(Array.isArray(raw) ? raw : []);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch inventory balances');
     } finally {
@@ -70,22 +86,38 @@ export const InventoryPage = () => {
     }
     try {
       const payload = {
-        from_warehouse_id: transferForm.from_warehouse_id,
-        to_warehouse_id: transferForm.to_warehouse_id,
+        source_warehouse_id: transferForm.from_warehouse_id,
+        destination_warehouse_id: transferForm.to_warehouse_id,
+        transfer_date: new Date().toISOString().split('T')[0],
         notes: transferForm.notes,
         items: transferForm.items.map((i) => ({
           item_id: i.item_id,
-          quantity: Number(i.quantity),
+          requested_qty: Number(i.quantity),
         })),
       };
       const res = await api.post('/warehouses/transfers', payload);
-      if (res.success && res.data?.id) {
-        // Auto-approve and complete transfer for immediate demonstration
-        await api.post(`/warehouses/transfers/${res.data.id}/approve`);
-        await api.post(`/warehouses/transfers/${res.data.id}/dispatch`);
-        await api.post(`/warehouses/transfers/${res.data.id}/receive`);
+      const transfer = res.data?.transfer || res.data;
+      if (transfer?.id && hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN)) {
+        try {
+          await api.post(`/warehouses/transfers/${transfer.id}/approve`);
+          await api.post(`/warehouses/transfers/${transfer.id}/dispatch`);
+          const transferItemId =
+            transfer.items?.[0]?.id || transfer.transfer_items?.[0]?.id;
+          if (transferItemId) {
+            await api.post(`/warehouses/transfers/${transfer.id}/receive`, {
+              items: [
+                {
+                  transfer_item_id: transferItemId,
+                  received_qty: Number(transferForm.items[0]?.quantity),
+                },
+              ],
+            });
+          }
+        } catch (flowErr) {
+          console.warn('Auto transfer dispatch/receive note:', flowErr.message);
+        }
       }
-      alert('Warehouse stock transfer executed and ledger updated!');
+      alert('Warehouse stock transfer recorded successfully!');
       setTransferModalOpen(false);
       fetchData();
     } catch (err) {
@@ -99,9 +131,10 @@ export const InventoryPage = () => {
       const payload = {
         warehouse_id: adjForm.warehouse_id,
         item_id: adjForm.item_id,
+        adjustment_date: new Date().toISOString().split('T')[0],
+        adjustment_type: adjForm.reason || 'physical_count',
         physical_count: Number(adjForm.physical_count),
-        reason: adjForm.reason,
-        notes: adjForm.notes,
+        reason: adjForm.notes || 'Quarterly physical stock audit',
       };
       await api.post('/inventory/adjustments', payload);
       alert('Stock adjustment recorded. Immutable ledger transaction posted.');
@@ -174,7 +207,7 @@ export const InventoryPage = () => {
             <LoadingSpinner text="Computing inventory moving averages..." />
           ) : error ? (
             <div className="text-rose-600 text-xs p-4 text-center">{error}</div>
-          ) : stock.length === 0 ? (
+          ) : (!Array.isArray(stock) || stock.length === 0) ? (
             <EmptyState message="No inventory balances on hand" />
           ) : (
             <div className="overflow-x-auto">
@@ -191,7 +224,7 @@ export const InventoryPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {stock.map((item) => {
+                  {(Array.isArray(stock) ? stock : []).map((item) => {
                     const qty = parseFloat(item.quantity_on_hand || item.current_stock || 0);
                     const cost = parseFloat(item.moving_avg_cost || item.current_moving_avg_cost || 0);
                     const valuation = qty * cost;
@@ -200,14 +233,14 @@ export const InventoryPage = () => {
                         <td className="py-3 px-4 font-mono font-semibold text-blue-600">{item.sku}</td>
                         <td className="py-3 px-4 font-semibold text-slate-900">{item.name || item.item_name}</td>
                         <td className="py-3 px-4">
-                          <Badge variant={item.item_type === 'finished_goods' ? 'purple' : 'primary'}>
+                          <Badge variant={item.item_type === 'finished_goods' || item.item_type === 'finished_good' ? 'purple' : 'primary'}>
                             {item.item_type || 'Product'}
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
                           {qty.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-3 px-4 text-slate-500">{item.base_uom_name || 'Units'}</td>
+                        <td className="py-3 px-4 text-slate-500">{item.base_uom_name || item.uom || 'Units'}</td>
                         <td className="py-3 px-4 text-right font-mono font-medium">
                           ₹{cost.toFixed(2)}
                         </td>
@@ -229,7 +262,7 @@ export const InventoryPage = () => {
         <Card>
           {loading ? (
             <LoadingSpinner text="Querying FEFO batches..." />
-          ) : batches.length === 0 ? (
+          ) : (!Array.isArray(batches) || batches.length === 0) ? (
             <EmptyState message="No active batches in stock" />
           ) : (
             <div className="overflow-x-auto">
@@ -245,7 +278,7 @@ export const InventoryPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {batches.map((b, idx) => {
+                  {(Array.isArray(batches) ? batches : []).map((b, idx) => {
                     const expiry = b.expiry_date ? new Date(b.expiry_date) : null;
                     const now = new Date();
                     const daysLeft = expiry ? Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)) : null;
@@ -302,9 +335,9 @@ export const InventoryPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Source...</option>
-                {warehouses.map((w) => (
+                {(Array.isArray(warehouses) ? warehouses : []).map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.name} ({w.code})
+                    {w.name} ({w.code || w.warehouse_code})
                   </option>
                 ))}
               </select>
@@ -318,9 +351,9 @@ export const InventoryPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Target...</option>
-                {warehouses.map((w) => (
+                {(Array.isArray(warehouses) ? warehouses : []).map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.name} ({w.code})
+                    {w.name} ({w.code || w.warehouse_code})
                   </option>
                 ))}
               </select>
@@ -342,7 +375,7 @@ export const InventoryPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Item...</option>
-                {items.map((i) => (
+                {(Array.isArray(items) ? items : []).map((i) => (
                   <option key={i.id} value={i.id}>
                     {i.name} ({i.sku})
                   </option>
@@ -403,7 +436,7 @@ export const InventoryPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Warehouse...</option>
-                {warehouses.map((w) => (
+                {(Array.isArray(warehouses) ? warehouses : []).map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
@@ -419,7 +452,7 @@ export const InventoryPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Item...</option>
-                {items.map((i) => (
+                {(Array.isArray(items) ? items : []).map((i) => (
                   <option key={i.id} value={i.id}>
                     {i.name} ({i.sku})
                   </option>
@@ -447,9 +480,10 @@ export const InventoryPage = () => {
                 onChange={(e) => setAdjForm({ ...adjForm, reason: e.target.value })}
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
-                <option value="RECONCILIATION">Periodic Audit Reconciliation</option>
-                <option value="DAMAGE">Damaged Goods Write-off</option>
-                <option value="SPOILAGE">Expired / Spoilage Disposal</option>
+                <option value="physical_count">Periodic Audit Reconciliation</option>
+                <option value="damage_write_off">Damaged Goods Write-off</option>
+                <option value="expiry_write_off">Expired / Spoilage Disposal</option>
+                <option value="scrap">Scrap / Production Waste</option>
               </select>
             </div>
           </div>

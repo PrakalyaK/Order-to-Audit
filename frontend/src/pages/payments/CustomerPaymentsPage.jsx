@@ -41,15 +41,32 @@ export const CustomerPaymentsPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [paymentsRes, partiesRes, invRes] = await Promise.all([
+      const canViewInvoices = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR);
+      const promises = [
         api.get('/payments'),
         api.get('/parties?party_type=customer'),
-        api.get('/invoices'),
-      ]);
+      ];
+      if (canViewInvoices) {
+        promises.push(api.get('/invoices'));
+      }
 
-      if (paymentsRes.success) setPayments(paymentsRes.data || []);
-      if (partiesRes.success) setCustomers(partiesRes.data || []);
-      if (invRes.success) setInvoices(invRes.data || []);
+      const results = await Promise.allSettled(promises);
+      const paymentsRes = results[0].status === 'fulfilled' ? results[0].value : null;
+      const partiesRes = results[1].status === 'fulfilled' ? results[1].value : null;
+      const invRes = canViewInvoices && results[2]?.status === 'fulfilled' ? results[2].value : null;
+
+      if (paymentsRes?.success) {
+        const raw = paymentsRes.data?.payments || paymentsRes.data;
+        setPayments(Array.isArray(raw) ? raw : []);
+      }
+      if (partiesRes?.success) {
+        const raw = partiesRes.data?.parties || partiesRes.data;
+        setCustomers(Array.isArray(raw) ? raw : []);
+      }
+      if (invRes?.success) {
+        const raw = invRes.data?.invoices || invRes.data;
+        setInvoices(Array.isArray(raw) ? raw : []);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch customer payments');
     } finally {
@@ -123,7 +140,7 @@ export const CustomerPaymentsPage = () => {
     }
   };
 
-  const filteredPayments = payments.filter(
+  const filteredPayments = (Array.isArray(payments) ? payments : []).filter(
     (p) =>
       p.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.reference_number?.toLowerCase().includes(search.toLowerCase())
@@ -257,9 +274,9 @@ export const CustomerPaymentsPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Customer...</option>
-                {customers.map((c) => (
+                {(Array.isArray(customers) ? customers : []).map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.party_name}
+                    {c.party_name || c.trade_name}
                   </option>
                 ))}
               </select>
@@ -322,11 +339,11 @@ export const CustomerPaymentsPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Leave as Unallocated Advance</option>
-                {invoices
+                {(Array.isArray(invoices) ? invoices : [])
                   .filter((i) => !form.customer_id || i.customer_id === form.customer_id)
                   .map((inv) => (
                     <option key={inv.id} value={inv.id}>
-                      {inv.invoice_number} (Total: ₹{parseFloat(inv.total_amount).toFixed(2)})
+                      {inv.invoice_number} (Total: ₹{parseFloat(inv.total_invoice_value || inv.total_amount || 0).toFixed(2)})
                     </option>
                   ))}
               </select>
@@ -358,11 +375,11 @@ export const CustomerPaymentsPage = () => {
               className="w-full border border-slate-300 rounded-lg p-2"
             >
               <option value="">Select Invoice...</option>
-              {invoices
+              {(Array.isArray(invoices) ? invoices : [])
                 .filter((i) => i.customer_id === selectedPayment?.customer_id)
                 .map((inv) => (
                   <option key={inv.id} value={inv.id}>
-                    {inv.invoice_number} (Total: ₹{parseFloat(inv.total_amount).toFixed(2)})
+                    {inv.invoice_number} (Total: ₹{parseFloat(inv.total_invoice_value || inv.total_amount || 0).toFixed(2)})
                   </option>
                 ))}
             </select>

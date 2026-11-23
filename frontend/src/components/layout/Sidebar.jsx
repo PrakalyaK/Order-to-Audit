@@ -34,8 +34,8 @@ export const Sidebar = () => {
       title: 'Master Data',
       items: [
         { name: 'Items & Products', path: '/master/items', icon: Package, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Bill of Materials', path: '/master/boms', icon: FileSpreadsheet, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Parties (Cust/Supp)', path: '/master/parties', icon: Users, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: 'Bill of Materials', path: '/master/boms', icon: FileSpreadsheet, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: 'Parties (Cust/Supp)', path: '/master/parties', icon: Users, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
         { name: 'Warehouses', path: '/master/warehouses', icon: Warehouse, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
         { name: 'User Management', path: '/master/users', icon: UserCheck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
       ],
@@ -61,7 +61,7 @@ export const Sidebar = () => {
       title: 'Finance & Compliance',
       items: [
         { name: 'Accounting & GL', path: '/accounting', icon: BookOpen, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
-        { name: 'Reports & Analytics', path: '/reports', icon: BarChart3, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: 'Reports & Analytics', path: '/reports', icon: BarChart3, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
         { name: 'Audit Trail Logs', path: '/audit', icon: ShieldCheck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
       ],
     },

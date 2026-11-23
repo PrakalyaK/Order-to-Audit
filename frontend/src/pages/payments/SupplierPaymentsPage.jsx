@@ -40,15 +40,28 @@ export const SupplierPaymentsPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [paymentsRes, partiesRes, billsRes] = await Promise.all([
+      const results = await Promise.allSettled([
         api.get('/supplier-payments'),
         api.get('/parties?party_type=supplier'),
         api.get('/purchases'),
       ]);
 
-      if (paymentsRes.success) setPayments(paymentsRes.data || []);
-      if (partiesRes.success) setSuppliers(partiesRes.data || []);
-      if (billsRes.success) setBills(billsRes.data || []);
+      const [paymentsRes, partiesRes, billsRes] = results.map((r) =>
+        r.status === 'fulfilled' ? r.value : null
+      );
+
+      if (paymentsRes?.success) {
+        const raw = paymentsRes.data?.payments || paymentsRes.data;
+        setPayments(Array.isArray(raw) ? raw : []);
+      }
+      if (partiesRes?.success) {
+        const raw = partiesRes.data?.parties || partiesRes.data;
+        setSuppliers(Array.isArray(raw) ? raw : []);
+      }
+      if (billsRes?.success) {
+        const raw = billsRes.data?.purchases || billsRes.data;
+        setBills(Array.isArray(raw) ? raw : []);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch supplier payments');
     } finally {
@@ -63,15 +76,16 @@ export const SupplierPaymentsPage = () => {
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     try {
+      const mode = form.payment_method === 'bank_transfer' ? 'bank_transfer' : form.payment_method;
       const payload = {
         supplier_id: form.supplier_id,
         payment_date: form.payment_date,
-        amount: Number(form.amount),
-        payment_method: form.payment_method,
+        total_amount: Number(form.amount),
+        payment_mode: mode,
         reference_number: form.reference_number || undefined,
         notes: form.notes,
         allocations: form.purchase_bill_id
-          ? [{ purchase_bill_id: form.purchase_bill_id, amount: Number(form.allocated_amount || form.amount) }]
+          ? [{ purchase_bill_id: form.purchase_bill_id, allocated_amount: Number(form.allocated_amount || form.amount) }]
           : undefined,
       };
       await api.post('/supplier-payments', payload);
@@ -87,7 +101,7 @@ export const SupplierPaymentsPage = () => {
     const reason = window.prompt(`Enter reason for reversing payment ${payment.payment_number || payment.id}:`);
     if (!reason) return;
     try {
-      await api.post(`/supplier-payments/${payment.id}/reverse`, { reason });
+      await api.post(`/supplier-payments/${payment.id}/reverse`, { reversal_reason: reason });
       alert('Supplier payment reversed and purchase bill liability restored.');
       fetchData();
     } catch (err) {
@@ -112,7 +126,7 @@ export const SupplierPaymentsPage = () => {
     try {
       await api.post(`/supplier-payments/${selectedPayment.id}/allocate`, {
         purchase_bill_id: allocForm.purchase_bill_id,
-        amount: Number(allocForm.allocated_amount),
+        allocated_amount: Number(allocForm.allocated_amount),
       });
       alert('Advance allocated to purchase bill successfully.');
       setAllocateModalOpen(false);
@@ -122,7 +136,7 @@ export const SupplierPaymentsPage = () => {
     }
   };
 
-  const filteredPayments = payments.filter(
+  const filteredPayments = (Array.isArray(payments) ? payments : []).filter(
     (p) =>
       p.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
       p.payment_number?.toLowerCase().includes(search.toLowerCase())
@@ -256,9 +270,9 @@ export const SupplierPaymentsPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Select Supplier...</option>
-                {suppliers.map((s) => (
+                {(Array.isArray(suppliers) ? suppliers : []).map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.party_name}
+                    {s.party_name || s.trade_name}
                   </option>
                 ))}
               </select>
@@ -320,7 +334,7 @@ export const SupplierPaymentsPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="">Leave as Unallocated Advance</option>
-                {bills
+                {(Array.isArray(bills) ? bills : [])
                   .filter((b) => !form.supplier_id || b.supplier_id === form.supplier_id)
                   .map((b) => (
                     <option key={b.id} value={b.id}>
@@ -356,11 +370,11 @@ export const SupplierPaymentsPage = () => {
               className="w-full border border-slate-300 rounded-lg p-2"
             >
               <option value="">Select Purchase Bill...</option>
-              {bills
+              {(Array.isArray(bills) ? bills : [])
                 .filter((b) => b.supplier_id === selectedPayment?.supplier_id)
                 .map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.bill_number} (Total: ₹{parseFloat(b.total_amount).toFixed(2)})
+                    {b.bill_number} (Bal: ₹{parseFloat(b.total_amount || 0).toFixed(2)})
                   </option>
                 ))}
             </select>

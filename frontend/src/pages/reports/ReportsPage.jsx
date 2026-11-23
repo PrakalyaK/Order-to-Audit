@@ -2,9 +2,14 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api/client';
 import { Card, Button, Badge, LoadingSpinner, EmptyState } from '../../components/ui';
 import { BarChart3, Search, FileText, ArrowRight, CheckCircle2, ShieldCheck, Printer } from 'lucide-react';
+import { useAuth, ROLES } from '../../context/AuthContext';
 
 export const ReportsPage = () => {
-  const [activeTab, setActiveTab] = useState('gst'); // 'gst' | 'aging' | 'variance' | 'traceability'
+  const { hasRole, user } = useAuth();
+  const canViewSales = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR);
+  const canViewProd = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR);
+
+  const [activeTab, setActiveTab] = useState(canViewSales ? 'gst' : 'variance'); // 'gst' | 'aging' | 'variance' | 'traceability'
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -19,13 +24,24 @@ export const ReportsPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [sRes, pRes] = await Promise.all([
-        api.get('/reports/sales'),
-        api.get('/reports/production'),
-      ]);
+      const promises = [];
+      if (canViewSales) promises.push(api.get('/reports/sales'));
+      if (canViewProd) promises.push(api.get('/reports/production'));
 
-      if (sRes.success) setSalesData(sRes.data);
-      if (pRes.success) setProdData(pRes.data);
+      const results = await Promise.allSettled(promises);
+      let idx = 0;
+      if (canViewSales) {
+        const sRes = results[idx++];
+        if (sRes?.status === 'fulfilled' && sRes.value?.success) {
+          setSalesData(sRes.value.data);
+        }
+      }
+      if (canViewProd) {
+        const pRes = results[idx++];
+        if (pRes?.status === 'fulfilled' && pRes.value?.success) {
+          setProdData(pRes.value.data);
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch statutory reports');
     } finally {
@@ -34,7 +50,7 @@ export const ReportsPage = () => {
   };
 
   const handleSearchTrace = async () => {
-    if (!traceBatch) return;
+    if (!canViewProd || !traceBatch) return;
     try {
       setTraceLoading(true);
       const res = await api.get(`/reports/traceability/${traceBatch}`);
@@ -50,7 +66,9 @@ export const ReportsPage = () => {
 
   useEffect(() => {
     fetchReports();
-    handleSearchTrace();
+    if (canViewProd) {
+      handleSearchTrace();
+    }
   }, []);
 
   return (
@@ -66,54 +84,62 @@ export const ReportsPage = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('gst')}
-          className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
-            activeTab === 'gst'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          GSTR Outward Supplies Register
-        </button>
-        <button
-          onClick={() => setActiveTab('aging')}
-          className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
-            activeTab === 'aging'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Receivables Ageing Analysis
-        </button>
-        <button
-          onClick={() => setActiveTab('variance')}
-          className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
-            activeTab === 'variance'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Production Yield & Variance
-        </button>
-        <button
-          onClick={() => setActiveTab('traceability')}
-          className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
-            activeTab === 'traceability'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          End-to-End Batch Traceability
-        </button>
+        {canViewSales && (
+          <button
+            onClick={() => setActiveTab('gst')}
+            className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
+              activeTab === 'gst'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            GSTR Outward Supplies Register
+          </button>
+        )}
+        {canViewSales && (
+          <button
+            onClick={() => setActiveTab('aging')}
+            className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
+              activeTab === 'aging'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Receivables Ageing Analysis
+          </button>
+        )}
+        {canViewProd && (
+          <button
+            onClick={() => setActiveTab('variance')}
+            className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
+              activeTab === 'variance'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Production Yield & Variance
+          </button>
+        )}
+        {canViewProd && (
+          <button
+            onClick={() => setActiveTab('traceability')}
+            className={`py-2 px-4 text-xs font-semibold border-b-2 transition ${
+              activeTab === 'traceability'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            End-to-End Batch Traceability
+          </button>
+        )}
       </div>
 
       {/* GSTR Outward Register Tab */}
-      {activeTab === 'gst' && (
+      {activeTab === 'gst' && canViewSales && (
         <Card title="GSTR Outward Supplies (v_gst_outward_summary)" subtitle="Statutory tax breakdown per invoice">
           {loading ? (
             <LoadingSpinner text="Compiling GSTR Outward Supplies..." />
-          ) : salesData?.gst_outward?.length === 0 ? (
+          ) : !Array.isArray(salesData?.gst_outward) || salesData.gst_outward.length === 0 ? (
             <EmptyState message="No outward supplies logged" />
           ) : (
             <div className="overflow-x-auto">
@@ -132,7 +158,7 @@ export const ReportsPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {salesData?.gst_outward?.map((row, idx) => (
+                  {(Array.isArray(salesData?.gst_outward) ? salesData.gst_outward : []).map((row, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{row.invoice_number}</td>
                       <td className="py-2.5 px-4 text-slate-500">{row.invoice_date}</td>
@@ -163,7 +189,7 @@ export const ReportsPage = () => {
       )}
 
       {/* Receivables Ageing Tab */}
-      {activeTab === 'aging' && (
+      {activeTab === 'aging' && canViewSales && (
         <Card title="Customer Receivables Ageing (v_customer_outstanding)" subtitle="Outstanding balances categorized by statutory ageing intervals">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
@@ -180,7 +206,7 @@ export const ReportsPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {salesData?.customer_outstanding?.map((row, idx) => (
+                {(Array.isArray(salesData?.customer_outstanding) ? salesData.customer_outstanding : []).map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-2.5 px-4 font-semibold text-slate-900">{row.customer_name}</td>
                     <td className="py-2.5 px-4 text-slate-500">{row.state_name}</td>
@@ -211,7 +237,7 @@ export const ReportsPage = () => {
       )}
 
       {/* Production Variance Tab */}
-      {activeTab === 'variance' && (
+      {activeTab === 'variance' && canViewProd && (
         <Card title="Production Yield & Material Variance (v_production_variance)" subtitle="Comparison between standard BOM requirements and actual consumed inputs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
@@ -228,7 +254,7 @@ export const ReportsPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {prodData?.variance?.map((row, idx) => (
+                {(Array.isArray(prodData?.variance) ? prodData.variance : []).map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{row.run_number}</td>
                     <td className="py-2.5 px-4 font-semibold text-slate-900">{row.finished_good_name}</td>

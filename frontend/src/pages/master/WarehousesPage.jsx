@@ -33,7 +33,8 @@ export const WarehousesPage = () => {
       setError('');
       const res = await api.get('/warehouses');
       if (res.success && res.data) {
-        setWarehouses(res.data);
+        const raw = res.data?.warehouses || res.data;
+        setWarehouses(Array.isArray(raw) ? raw : []);
       }
     } catch (err) {
       setError(err.message || 'Failed to fetch warehouses');
@@ -48,7 +49,8 @@ export const WarehousesPage = () => {
       setStockModalOpen(true);
       const res = await api.get(`/warehouses/${w.id}/stock`);
       if (res.success && res.data) {
-        setSelectedStock({ warehouse: w, stock: res.data });
+        const rawStock = res.data?.stock || res.data;
+        setSelectedStock({ warehouse: w, stock: Array.isArray(rawStock) ? rawStock : [] });
       }
     } catch (err) {
       alert(`Failed to load warehouse stock: ${err.message}`);
@@ -60,7 +62,15 @@ export const WarehousesPage = () => {
   const handleCreateWarehouse = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/warehouses', form);
+      const payload = {
+        warehouse_code: form.code,
+        name: form.name,
+        address: form.address,
+        city: form.city,
+        state_code: form.state || 'TN',
+        is_active: form.is_active ?? true,
+      };
+      await api.post('/warehouses', payload);
       setIsModalOpen(false);
       setForm({
         code: '',
@@ -103,7 +113,7 @@ export const WarehousesPage = () => {
           <LoadingSpinner text="Fetching warehouse registry..." />
         ) : error ? (
           <div className="text-rose-600 text-xs p-4 text-center">{error}</div>
-        ) : warehouses.length === 0 ? (
+        ) : (!Array.isArray(warehouses) || warehouses.length === 0) ? (
           <EmptyState message="No warehouses found" />
         ) : (
           <div className="overflow-x-auto">
@@ -119,9 +129,9 @@ export const WarehousesPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {warehouses.map((w) => (
+                {(Array.isArray(warehouses) ? warehouses : []).map((w) => (
                   <tr key={w.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-blue-600">{w.code}</td>
+                    <td className="py-3 px-4 font-mono font-semibold text-blue-600">{w.code || w.warehouse_code}</td>
                     <td className="py-3 px-4 font-semibold text-slate-900">{w.name}</td>
                     <td className="py-3 px-4">
                       <Badge variant="primary">{w.warehouse_type || 'General'}</Badge>
@@ -176,7 +186,7 @@ export const WarehousesPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {selectedStock.stock.map((s, idx) => (
+                  {(Array.isArray(selectedStock?.stock) ? selectedStock.stock : []).map((s, idx) => (
                     <tr key={idx} className="hover:bg-slate-50">
                       <td className="py-2 px-3 font-medium text-slate-900">
                         {s.item_name}

@@ -44,7 +44,8 @@ export const AuditLogsPage = () => {
 
       const res = await api.get('/audit/logs', { params });
       if (res.success && res.data) {
-        setLogs(res.data);
+        const raw = res.data?.logs || res.data;
+        setLogs(Array.isArray(raw) ? raw : []);
         if (res.meta) setMeta(res.meta);
       }
     } catch (err) {
@@ -118,7 +119,7 @@ export const AuditLogsPage = () => {
             className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Tables / Entities</option>
-            {entities.map((ent) => (
+            {(Array.isArray(entities) ? entities : []).map((ent) => (
               <option key={ent} value={ent}>
                 {ent}
               </option>
@@ -134,7 +135,7 @@ export const AuditLogsPage = () => {
             className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Actions</option>
-            {actions.map((act) => (
+            {(Array.isArray(actions) ? actions : []).map((act) => (
               <option key={act} value={act}>
                 {act}
               </option>
@@ -149,7 +150,7 @@ export const AuditLogsPage = () => {
           <LoadingSpinner text="Reading immutable audit trail..." />
         ) : error ? (
           <div className="text-rose-600 text-xs p-4 text-center">{error}</div>
-        ) : logs.length === 0 ? (
+        ) : (!Array.isArray(logs) || logs.length === 0) ? (
           <EmptyState message="No audit records match the selected filter." />
         ) : (
           <div className="overflow-x-auto">
@@ -166,7 +167,7 @@ export const AuditLogsPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {logs.map((log) => (
+                {(Array.isArray(logs) ? logs : []).map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-2.5 px-4 font-mono font-semibold text-slate-500">#{log.id}</td>
                     <td className="py-2.5 px-4 text-slate-600 text-[11px] font-mono">

@@ -32,17 +32,53 @@ export const AccountingPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [tbRes, accRes, jvRes, plRes] = await Promise.all([
-        api.get('/accounting/trial-balance'),
+      const results = await Promise.allSettled([
+        api.get('/accounting/reports/trial-balance'),
         api.get('/accounting/accounts'),
         api.get('/accounting/journal-entries'),
-        api.get('/accounting/profit-and-loss'),
+        api.get('/accounting/reports/profit-and-loss'),
       ]);
 
-      if (tbRes.success) setTrialBalance(tbRes.data || []);
-      if (accRes.success) setAccounts(accRes.data || []);
-      if (jvRes.success) setJournalEntries(jvRes.data || []);
-      if (plRes.success) setPlData(plRes.data || []);
+      const [tbRes, accRes, jvRes, plRes] = results.map((r) =>
+        r.status === 'fulfilled' ? r.value : null
+      );
+
+      if (tbRes?.success) {
+        const raw = tbRes.data?.accounts || tbRes.data;
+        setTrialBalance(Array.isArray(raw) ? raw : []);
+      }
+      if (accRes?.success) {
+        const raw = accRes.data?.accounts || accRes.data;
+        setAccounts(Array.isArray(raw) ? raw : []);
+      }
+      if (jvRes?.success) {
+        const raw = jvRes.data?.entries || jvRes.data?.journal_entries || jvRes.data;
+        setJournalEntries(Array.isArray(raw) ? raw : []);
+      }
+      if (plRes?.success) {
+        const rawPl = plRes.data || {};
+        const flattened = [];
+        const categories = [
+          { key: 'revenue', label: 'Revenue' },
+          { key: 'cost_of_goods_sold', label: 'Cost of Goods Sold' },
+          { key: 'manufacturing_overheads', label: 'Manufacturing Overheads' },
+          { key: 'operating_expenses', label: 'Operating Expenses' },
+        ];
+        categories.forEach(({ key, label }) => {
+          const section = rawPl[key];
+          if (section && Array.isArray(section.accounts)) {
+            section.accounts.forEach((acc) => {
+              flattened.push({
+                account_code: acc.code || acc.account_code,
+                account_name: acc.name || acc.account_name,
+                classification: label,
+                net_amount: acc.amount ?? acc.balance ?? acc.net_balance ?? 0,
+              });
+            });
+          }
+        });
+        setPlData(flattened);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch financial accounting books');
     } finally {
@@ -76,17 +112,22 @@ export const AccountingPage = () => {
       alert(`Double-entry rule violation: Total debits (₹${totalDebit}) must equal total credits (₹${totalCredit}).`);
       return;
     }
+    if (totalDebit <= 0) {
+      alert('Debit and credit amounts must be strictly greater than zero.');
+      return;
+    }
 
     try {
       const payload = {
         entry_date: journalForm.entry_date,
-        description: journalForm.description,
-        reference: journalForm.reference,
+        narration: journalForm.description || 'Year-end statutory adjustment',
+        source_type: 'MANUAL',
+        source_reference: journalForm.reference || undefined,
         lines: journalForm.lines.map((l) => ({
           account_id: l.account_id,
-          debit: Number(l.debit) || 0,
-          credit: Number(l.credit) || 0,
-          description: l.description,
+          debit_amount: Number(l.debit) || 0,
+          credit_amount: Number(l.credit) || 0,
+          description: l.description || journalForm.description,
         })),
       };
       await api.post('/accounting/journal-entries', payload);
@@ -165,7 +206,7 @@ export const AccountingPage = () => {
             <LoadingSpinner text="Summing debit and credit balances..." />
           ) : error ? (
             <div className="text-rose-600 text-xs p-4 text-center">{error}</div>
-          ) : trialBalance.length === 0 ? (
+          ) : (!Array.isArray(trialBalance) || trialBalance.length === 0) ? (
             <EmptyState message="No balance recorded in ledger" />
           ) : (
             <div className="overflow-x-auto">
@@ -180,7 +221,7 @@ export const AccountingPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {trialBalance.map((row, idx) => (
+                  {(Array.isArray(trialBalance) ? trialBalance : []).map((row, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{row.account_code}</td>
                       <td className="py-2.5 px-4 font-semibold text-slate-900">{row.account_name}</td>
@@ -220,10 +261,10 @@ export const AccountingPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {accounts.map((acc) => (
+                {(Array.isArray(accounts) ? accounts : []).map((acc) => (
                   <tr key={acc.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{acc.code}</td>
-                    <td className="py-2.5 px-4 font-semibold text-slate-900">{acc.name}</td>
+                    <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{acc.code || acc.account_code}</td>
+                    <td className="py-2.5 px-4 font-semibold text-slate-900">{acc.name || acc.account_name}</td>
                     <td className="py-2.5 px-4 uppercase text-[10px] font-bold">
                       <Badge variant={acc.account_type === 'asset' ? 'primary' : acc.account_type === 'liability' ? 'warning' : 'purple'}>
                         {acc.account_type}
@@ -247,7 +288,7 @@ export const AccountingPage = () => {
       {/* Journal Entries Tab */}
       {activeTab === 'journals' && (
         <Card title="Journal Vouchers" subtitle="General Ledger transactional postings">
-          {journalEntries.length === 0 ? (
+          {(!Array.isArray(journalEntries) || journalEntries.length === 0) ? (
             <EmptyState message="No manual journal entries recorded yet." />
           ) : (
             <div className="overflow-x-auto">
@@ -262,12 +303,12 @@ export const AccountingPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {journalEntries.map((jv) => (
+                  {(Array.isArray(journalEntries) ? journalEntries : []).map((jv) => (
                     <tr key={jv.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-mono font-semibold text-blue-600">{jv.entry_number}</td>
                       <td className="py-3 px-4 text-slate-500">{jv.entry_date}</td>
-                      <td className="py-3 px-4 font-medium text-slate-900">{jv.description}</td>
-                      <td className="py-3 px-4 font-mono text-[11px]">{jv.reference || '-'}</td>
+                      <td className="py-3 px-4 font-medium text-slate-900">{jv.description || jv.narration}</td>
+                      <td className="py-3 px-4 font-mono text-[11px]">{jv.reference || jv.source_reference || '-'}</td>
                       <td className="py-3 px-4 text-center">
                         <Badge variant="success">{jv.status || 'POSTED'}</Badge>
                       </td>
@@ -294,20 +335,26 @@ export const AccountingPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {plData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{row.account_code}</td>
-                    <td className="py-2.5 px-4 font-semibold text-slate-900">{row.account_name}</td>
-                    <td className="py-2.5 px-4 uppercase text-[10px] font-bold">
-                      <Badge variant={row.account_type === 'revenue' ? 'success' : 'rose'}>
-                        {row.account_type}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
-                      ₹{parseFloat(row.net_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {(!Array.isArray(plData) || plData.length === 0) ? (
+                  <tr>
+                    <td colSpan="4" className="text-center py-6 text-slate-400">
+                      No profit & loss activity recorded yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  plData.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-2.5 px-4 font-mono font-semibold text-blue-600">{row.account_code}</td>
+                      <td className="py-2.5 px-4 font-semibold text-slate-900">{row.account_name}</td>
+                      <td className="py-2.5 px-4 font-medium text-slate-600">
+                        {row.classification}
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
+                        ₹{parseFloat(row.net_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -14,7 +14,8 @@ export const UsersPage = () => {
       setError('');
       const res = await api.get('/users');
       if (res.success && res.data) {
-        setUsers(res.data);
+        const raw = res.data?.users || res.data;
+        setUsers(Array.isArray(raw) ? raw : []);
       }
     } catch (err) {
       setError(err.message || 'Failed to fetch users');
@@ -60,7 +61,7 @@ export const UsersPage = () => {
           <LoadingSpinner text="Fetching user accounts from PostgreSQL..." />
         ) : error ? (
           <div className="text-rose-600 text-xs p-4 text-center">{error}</div>
-        ) : users.length === 0 ? (
+        ) : (!Array.isArray(users) || users.length === 0) ? (
           <EmptyState message="No users found" />
         ) : (
           <div className="overflow-x-auto">
@@ -76,7 +77,7 @@ export const UsersPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {users.map((u) => (
+                {(Array.isArray(users) ? users : []).map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4 font-semibold text-slate-900">{u.full_name}</td>
                     <td className="py-3 px-4 font-mono font-medium text-blue-600">{u.username}</td>

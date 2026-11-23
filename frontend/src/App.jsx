@@ -48,8 +48,22 @@ function App() {
 
             {/* Master Data */}
             <Route path="master/items" element={<ItemsPage />} />
-            <Route path="master/boms" element={<BomsPage />} />
-            <Route path="master/parties" element={<PartiesPage />} />
+            <Route
+              path="master/boms"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <BomsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="master/parties"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR]}>
+                  <PartiesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="master/warehouses"
               element={
@@ -141,7 +155,7 @@ function App() {
             <Route
               path="reports"
               element={
-                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR]}>
                   <ReportsPage />
                 </ProtectedRoute>
               }

@@ -228,7 +228,7 @@ export const DashboardPage = () => {
         {/* Recent Invoices */}
         <Card title="Recent Invoices" subtitle="Latest billed customer invoices">
           <div className="divide-y divide-slate-100">
-            {recent?.invoices?.length > 0 ? (
+            {Array.isArray(recent?.invoices) && recent.invoices.length > 0 ? (
               recent.invoices.map((inv) => (
                 <div key={inv.id} className="py-2.5 flex items-center justify-between text-xs">
                   <div>
@@ -236,7 +236,9 @@ export const DashboardPage = () => {
                     <p className="text-[11px] text-slate-500">{inv.customer_name}</p>
                   </div>
                   <div className="text-right">
-                    <span className="font-semibold text-slate-900">₹{parseFloat(inv.total_amount).toLocaleString('en-IN')}</span>
+                    <span className="font-semibold text-slate-900">
+                      ₹{parseFloat(inv.total_amount || inv.total_invoice_value || 0).toLocaleString('en-IN')}
+                    </span>
                     <div>
                       <Badge variant={inv.status === 'paid' ? 'success' : 'primary'}>{inv.status}</Badge>
                     </div>
@@ -252,19 +254,19 @@ export const DashboardPage = () => {
         {/* Recent Production Runs */}
         <Card title="Recent Production Runs" subtitle="Batch execution status">
           <div className="divide-y divide-slate-100">
-            {recent?.production_runs?.length > 0 ? (
+            {Array.isArray(recent?.production_runs) && recent.production_runs.length > 0 ? (
               recent.production_runs.map((pr) => (
                 <div key={pr.id} className="py-2.5 flex items-center justify-between text-xs">
                   <div>
                     <span className="font-semibold text-slate-800">{pr.run_number}</span>
-                    <p className="text-[11px] text-slate-500">{pr.item_name}</p>
+                    <p className="text-[11px] text-slate-500">{pr.item_name || pr.finished_good_name}</p>
                   </div>
                   <div className="text-right">
                     <span className="font-medium text-slate-700">
-                      {parseFloat(pr.actual_output_qty || pr.planned_output_qty)} units
+                      {parseFloat(pr.actual_good_output_qty || pr.actual_output_qty || pr.planned_yield_qty || pr.planned_output_qty || 0)} units
                     </span>
                     <div>
-                      <Badge variant={pr.status === 'COMPLETED' ? 'success' : 'warning'}>{pr.status}</Badge>
+                      <Badge variant={pr.status === 'COMPLETED' || pr.status === 'completed' ? 'success' : 'warning'}>{pr.status}</Badge>
                     </div>
                   </div>
                 </div>
@@ -278,7 +280,7 @@ export const DashboardPage = () => {
         {/* Recent Purchase Bills */}
         <Card title="Recent Purchases" subtitle="Inbound supplier shipments">
           <div className="divide-y divide-slate-100">
-            {recent?.purchase_bills?.length > 0 ? (
+            {Array.isArray(recent?.purchase_bills) && recent.purchase_bills.length > 0 ? (
               recent.purchase_bills.map((pb) => (
                 <div key={pb.id} className="py-2.5 flex items-center justify-between text-xs">
                   <div>
@@ -286,9 +288,11 @@ export const DashboardPage = () => {
                     <p className="text-[11px] text-slate-500">{pb.supplier_name}</p>
                   </div>
                   <div className="text-right">
-                    <span className="font-semibold text-slate-900">₹{parseFloat(pb.total_amount).toLocaleString('en-IN')}</span>
+                    <span className="font-semibold text-slate-900">
+                      ₹{parseFloat(pb.total_amount || 0).toLocaleString('en-IN')}
+                    </span>
                     <div>
-                      <Badge variant={pb.status === 'received' ? 'success' : 'default'}>{pb.status}</Badge>
+                      <Badge variant={pb.status === 'received' || pb.status === 'posted' ? 'success' : 'default'}>{pb.status}</Badge>
                     </div>
                   </div>
                 </div>
