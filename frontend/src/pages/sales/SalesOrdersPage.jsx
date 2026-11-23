@@ -61,7 +61,7 @@ export const SalesOrdersPage = () => {
 
   const handleGenerateInvoice = async (order) => {
     try {
-      const res = await api.post('/invoices', { sales_order_id: order.id });
+      const res = await api.post('/invoices', { salesOrderId: order.id });
       alert(`GST Tax Invoice generated successfully: ${res.data?.invoice_number || 'Posted'}`);
       fetchData();
     } catch (err) {
@@ -93,12 +93,12 @@ export const SalesOrdersPage = () => {
     setSubmitting(true);
     try {
       const payload = {
-        customer_id: form.customer_id,
-        order_date: form.order_date,
+        customerId: form.customer_id,
+        orderDate: form.order_date,
         items: form.items.map((i) => ({
-          item_id: i.item_id,
-          quantity: Number(i.quantity),
-          unit_price: Number(i.unit_price),
+          itemId: i.item_id,
+          orderedQty: Number(i.quantity),
+          unitPrice: Number(i.unit_price),
         })),
       };
       await api.post('/sales-orders', payload);

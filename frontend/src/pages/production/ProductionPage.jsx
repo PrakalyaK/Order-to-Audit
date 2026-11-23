@@ -107,8 +107,8 @@ export const ProductionPage = () => {
         actual_good_output_qty: Number(completeForm.actual_output_qty),
         actual_scrap_output_qty: Number(completeForm.actual_scrap_qty || 0),
         overheads: [
-          ...(Number(completeForm.labour_cost) > 0 ? [{ overhead_name: 'Factory Labor', amount: Number(completeForm.labour_cost) }] : []),
-          ...(Number(completeForm.overhead_cost) > 0 ? [{ overhead_name: 'Factory Electricity & Power', amount: Number(completeForm.overhead_cost) }] : []),
+          ...(Number(completeForm.labour_cost) > 0 ? [{ overhead_type: 'labour', description: 'Factory Labor', amount: Number(completeForm.labour_cost) }] : []),
+          ...(Number(completeForm.overhead_cost) > 0 ? [{ overhead_type: 'power_gas', description: 'Factory Electricity & Power', amount: Number(completeForm.overhead_cost) }] : []),
         ],
       };
       await api.post(`/production/${selectedRun.id}/yield`, payload);

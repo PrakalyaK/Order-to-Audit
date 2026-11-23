@@ -57,7 +57,9 @@ async function runE2EWorkflow() {
 
   const flourItem = items.find(i => i.sku === 'RM-FLOUR');
   const oilItem = items.find(i => i.sku === 'RM-OIL');
+  const spiceItem = items.find(i => i.sku === 'RM-SPICE');
   const pouchItem = items.find(i => i.sku === 'PK-POUCH-200G');
+  const cartonItem = items.find(i => i.sku === 'PK-CARTON-20');
   const fgItem = items.find(i => i.sku === 'FG-MRK-200G');
 
   if (!flourItem || !oilItem || !pouchItem || !fgItem) {
@@ -110,6 +112,30 @@ async function runE2EWorkflow() {
         unit_rate: 130.0,
         supplier_batch_no: `LOT-OIL-${Date.now().toString().slice(-4)}`,
         expiry_date: '2027-06-30',
+      },
+      {
+        item_id: pouchItem.id,
+        quantity: 500.0,
+        uom_id: 'PCS',
+        unit_rate: 2.5,
+        supplier_batch_no: `LOT-POUCH-${Date.now().toString().slice(-4)}`,
+        expiry_date: '2028-12-31',
+      },
+      {
+        item_id: spiceItem.id,
+        quantity: 20.0,
+        uom_id: 'KG',
+        unit_rate: 200.0,
+        supplier_batch_no: `LOT-SPICE-${Date.now().toString().slice(-4)}`,
+        expiry_date: '2028-12-31',
+      },
+      {
+        item_id: cartonItem.id,
+        quantity: 50.0,
+        uom_id: 'PCS',
+        unit_rate: 15.0,
+        supplier_batch_no: `LOT-CARTON-${Date.now().toString().slice(-4)}`,
+        expiry_date: '2029-12-31',
       },
     ],
   };
@@ -179,11 +205,13 @@ async function runE2EWorkflow() {
     actual_scrap_output_qty: 2.0,
     overheads: [
       {
-        overhead_name: 'Factory Electricity (E2E Batch)',
+        overhead_type: 'power_gas',
+        description: 'Factory Electricity (E2E Batch)',
         amount: 350.0,
       },
       {
-        overhead_name: 'Machine Operator Labor',
+        overhead_type: 'labour',
+        description: 'Machine Operator Labor',
         amount: 250.0,
       },
     ],
@@ -197,7 +225,7 @@ async function runE2EWorkflow() {
   console.log(`    Good Output: ${yieldRes.data.actual_good_output_qty} packets`);
 
   const costingRes = await req(`/production/${runId}/costing`, {}, token);
-  const costing = costingRes.data;
+  const costing = costingRes.data.costing || costingRes.data;
   console.log(` -> Production Costing Analysis:`);
   console.log(`    Raw Material Cost: ₹${Number(costing.total_raw_material_cost).toFixed(2)}`);
   console.log(`    Packaging Cost: ₹${Number(costing.total_packaging_cost).toFixed(2)}`);
@@ -210,18 +238,17 @@ async function runE2EWorkflow() {
   // --------------------------------------------------------------------------
   console.log('\n[Step 5] Executing Sales Workflow (Order -> Invoice -> Dispatch)...');
   const soPayload = {
-    customer_id: customer.id,
-    order_date: new Date().toISOString().split('T')[0],
-    target_delivery_date: new Date().toISOString().split('T')[0],
+    customerId: customer.id,
+    orderDate: new Date().toISOString().split('T')[0],
+    notes: 'E2E automated sales order',
     items: [
       {
-        item_id: fgItem.id,
-        ordered_qty: 50.0,
-        uom_id: 'PKT',
-        unit_price: 35.0,
+        itemId: fgItem.id,
+        orderedQty: 50.0,
+        uomId: 'PKT',
+        unitPrice: 35.0,
       },
     ],
-    notes: 'E2E automated sales order',
   };
 
   const createSoRes = await req('/sales-orders', {
@@ -241,9 +268,9 @@ async function runE2EWorkflow() {
 
   // Generate GST Invoice
   const invPayload = {
-    sales_order_id: soId,
-    invoice_date: new Date().toISOString().split('T')[0],
-    notes: 'E2E GST Tax Invoice',
+    salesOrderId: soId,
+    invoiceDate: new Date().toISOString().split('T')[0],
+    status: 'posted',
   };
 
   const createInvRes = await req('/invoices', {
@@ -342,20 +369,22 @@ async function runE2EWorkflow() {
   const tbRes = await req('/accounting/reports/trial-balance', {}, token);
   const tb = tbRes.data;
   console.log(` -> Trial Balance Verification:`);
-  console.log(`    Total Debits: ₹${Number(tb.total_debits).toFixed(2)}`);
-  console.log(`    Total Credits: ₹${Number(tb.total_credits).toFixed(2)}`);
-  console.log(`    Is Balanced: ${tb.is_balanced} (Difference: ₹${Number(tb.difference).toFixed(2)})`);
+  console.log(`    Total Debits: ₹${Number(tb.total_net_debit || tb.total_gross_debit).toFixed(2)}`);
+  console.log(`    Total Credits: ₹${Number(tb.total_net_credit || tb.total_gross_credit).toFixed(2)}`);
+  console.log(`    Is Balanced: ${tb.is_balanced} (Variance: ₹${Number(tb.variance).toFixed(2)})`);
 
   if (!tb.is_balanced) {
-    throw new Error(`Trial balance is unbalanced! Debits: ${tb.total_debits}, Credits: ${tb.total_credits}`);
+    throw new Error(`Trial balance is unbalanced! Debits: ${tb.total_net_debit}, Credits: ${tb.total_net_credit}`);
   }
 
   // Verify P&L and Balance Sheet
   const plRes = await req('/accounting/reports/profit-and-loss', {}, token);
-  console.log(` -> Profit & Loss Statement: Revenue: ₹${Number(plRes.data.summary.total_revenue).toFixed(2)}, Expenses: ₹${Number(plRes.data.summary.total_expenses).toFixed(2)}, Net Profit: ₹${Number(plRes.data.summary.net_profit).toFixed(2)}`);
+  const pl = plRes.data;
+  console.log(` -> Profit & Loss Statement: Revenue: ₹${Number(pl.revenue?.total || 0).toFixed(2)}, Expenses: ₹${Number(pl.total_expenses || 0).toFixed(2)}, Net Profit: ₹${Number(pl.net_profit || 0).toFixed(2)}`);
 
   const bsRes = await req('/accounting/reports/balance-sheet', {}, token);
-  console.log(` -> Balance Sheet: Assets: ₹${Number(bsRes.data.summary.total_assets).toFixed(2)}, Liabilities: ₹${Number(bsRes.data.summary.total_liabilities).toFixed(2)}, Equity: ₹${Number(bsRes.data.summary.total_equity).toFixed(2)}`);
+  const bs = bsRes.data;
+  console.log(` -> Balance Sheet: Assets: ₹${Number(bs.assets?.total_assets || 0).toFixed(2)}, Liabilities: ₹${Number(bs.liabilities?.total_liabilities || 0).toFixed(2)}, Equity: ₹${Number(bs.equity?.total_equity || 0).toFixed(2)}`);
 
   // Verify Dashboard Metrics update
   const finalDashRes = await req('/reports/dashboard', {}, token);
