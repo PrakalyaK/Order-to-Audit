@@ -20,6 +20,9 @@ import supplierPaymentsRoutes from './modules/supplier-payments/supplier-payment
 import warehousesRoutes from './modules/warehouses/warehouses.routes.js';
 import batchesRoutes from './modules/batches/batches.routes.js';
 import payrollRoutes, { employeesRouter } from './modules/payroll/payroll.routes.js';
+import auditRoutes from './modules/audit/audit.routes.js';
+import reportsRoutes from './modules/reports/reports.routes.js';
+import usersRoutes from './modules/users/users.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
@@ -95,6 +98,9 @@ app.use(`${env.apiPrefix}/warehouses`, warehousesRoutes);
 app.use(`${env.apiPrefix}/batches`, batchesRoutes);
 app.use(`${env.apiPrefix}/employees`, employeesRouter);
 app.use(`${env.apiPrefix}/payroll`, payrollRoutes);
+app.use(`${env.apiPrefix}/audit`, auditRoutes);
+app.use(`${env.apiPrefix}/reports`, reportsRoutes);
+app.use(`${env.apiPrefix}/users`, usersRoutes);
 app.use(`${env.apiPrefix}/health`, healthRoutes);
 app.use('/health', healthRoutes);
 
