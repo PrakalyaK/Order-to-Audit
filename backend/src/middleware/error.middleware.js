@@ -74,8 +74,11 @@ export const errorHandler = (err, req, res, next) => {
   // 3. Fallback for unknown runtime errors
   if (!(error instanceof ApiError)) {
     const statusCode = error.statusCode || 500;
-    const message = isDev ? (error.message || 'An unexpected internal error occurred') : 'Internal server error';
-    error = new ApiError(statusCode, message, [], false, err.stack);
+    const isClientError = statusCode >= 400 && statusCode < 500;
+    const message = (isDev || isClientError)
+      ? (error.message || 'Client error occurred')
+      : 'Internal server error';
+    error = new ApiError(statusCode, message, error.errors || [], isClientError, err.stack);
   }
 
   // Log actual server-side errors (HTTP 5xx or unhandled system failures)

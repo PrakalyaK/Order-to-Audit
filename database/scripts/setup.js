@@ -46,7 +46,7 @@ async function setupDatabase(dropSchema = false) {
 
     const userCount = await client.query('SELECT count(*)::int as count FROM users');
     const invCount = await client.query('SELECT count(*)::int as count FROM invoices');
-    const stockCount = await client.query('SELECT count(*)::int as count FROM stock_ledger');
+    const stockCount = await client.query('SELECT count(*)::int as count FROM inventory_ledger');
 
     console.log(`\nVerification Summary:`);
     console.log(`- Seeded Users: ${userCount.rows[0].count}`);
