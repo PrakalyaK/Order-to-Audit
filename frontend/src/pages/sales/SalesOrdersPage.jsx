@@ -29,17 +29,35 @@ export const SalesOrdersPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [ordersRes, partiesRes, itemsRes] = await Promise.all([
+      const [ordersRes, partiesRes, itemsRes] = await Promise.allSettled([
         api.get('/sales-orders'),
         api.get('/parties?party_type=customer'),
-        api.get('/items?item_type=finished_goods'),
+        api.get('/items?item_type=finished_good'),
       ]);
 
-      if (ordersRes.success) setOrders(ordersRes.data || []);
-      if (partiesRes.success) setCustomers(partiesRes.data || []);
-      if (itemsRes.success) setItems(itemsRes.data || []);
+      if (ordersRes.status === 'fulfilled' && ordersRes.value?.success) {
+        const raw = ordersRes.value.data?.salesOrders ?? ordersRes.value.data;
+        setOrders(Array.isArray(raw) ? raw : []);
+      } else {
+        setOrders([]);
+      }
+
+      if (partiesRes.status === 'fulfilled' && partiesRes.value?.success) {
+        const raw = partiesRes.value.data?.parties ?? partiesRes.value.data;
+        setCustomers(Array.isArray(raw) ? raw : []);
+      } else {
+        setCustomers([]);
+      }
+
+      if (itemsRes.status === 'fulfilled' && itemsRes.value?.success) {
+        const raw = itemsRes.value.data?.items ?? itemsRes.value.data;
+        setItems(Array.isArray(raw) ? raw : []);
+      } else {
+        setItems([]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch sales orders');
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -51,7 +69,7 @@ export const SalesOrdersPage = () => {
 
   const handleApprove = async (id) => {
     try {
-      await api.post(`/sales-orders/${id}/approve`);
+      await api.post(`/sales-orders/${id}/approve`, {});
       alert('Sales Order APPROVED. Ready for statutory invoicing and dispatch.');
       fetchData();
     } catch (err) {
@@ -256,7 +274,7 @@ export const SalesOrdersPage = () => {
                 <option value="">Select Customer...</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.party_name} ({c.state_name})
+                    {c.trade_name || c.party_name} ({c.state_name || 'Tamil Nadu'})
                   </option>
                 ))}
               </select>

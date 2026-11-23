@@ -41,17 +41,35 @@ export const ProductionPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [runsRes, bomsRes, whRes] = await Promise.all([
+      const [runsRes, bomsRes, whRes] = await Promise.allSettled([
         api.get('/production'),
         api.get('/boms'),
         api.get('/warehouses'),
       ]);
 
-      if (runsRes.success) setRuns(runsRes.data || []);
-      if (bomsRes.success) setBoms(bomsRes.data || []);
-      if (whRes.success) setWarehouses(whRes.data || []);
+      if (runsRes.status === 'fulfilled' && runsRes.value?.success) {
+        const raw = runsRes.value.data?.data ?? runsRes.value.data;
+        setRuns(Array.isArray(raw) ? raw : []);
+      } else {
+        setRuns([]);
+      }
+
+      if (bomsRes.status === 'fulfilled' && bomsRes.value?.success) {
+        const raw = bomsRes.value.data?.boms ?? bomsRes.value.data;
+        setBoms(Array.isArray(raw) ? raw : []);
+      } else {
+        setBoms([]);
+      }
+
+      if (whRes.status === 'fulfilled' && whRes.value?.success) {
+        const raw = whRes.value.data?.warehouses ?? whRes.value.data;
+        setWarehouses(Array.isArray(raw) ? raw : []);
+      } else {
+        setWarehouses([]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch production data');
+      setRuns([]);
     } finally {
       setLoading(false);
     }
@@ -198,10 +216,10 @@ export const ProductionPage = () => {
                     </td>
                     <td className="py-3 px-4 text-slate-500">{r.run_date}</td>
                     <td className="py-3 px-4 text-right font-mono font-medium">
-                      {parseFloat(r.planned_output_qty || 0).toLocaleString('en-IN')}
+                      {parseFloat(r.planned_yield_qty || r.planned_output_qty || 0).toLocaleString('en-IN')}
                     </td>
                     <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                      {r.actual_output_qty ? parseFloat(r.actual_output_qty).toLocaleString('en-IN') : '-'}
+                      {(r.actual_good_output_qty || r.actual_output_qty) ? parseFloat(r.actual_good_output_qty || r.actual_output_qty).toLocaleString('en-IN') : '-'}
                     </td>
                     <td className="py-3 px-4 text-center">{getStatusBadge(r.status)}</td>
                     <td className="py-3 px-4 text-center">
@@ -256,7 +274,7 @@ export const ProductionPage = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Finished SKU</span>
-                <span className="font-semibold text-slate-900">{selectedRun.item_name}</span>
+                <span className="font-semibold text-slate-900">{selectedRun.finished_good_name || selectedRun.item_name || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Output Batch</span>
@@ -267,13 +285,13 @@ export const ProductionPage = () => {
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Actual / Planned</span>
                 <span className="font-semibold text-slate-900">
-                  {selectedRun.actual_output_qty || '-'} / {selectedRun.planned_output_qty} units
+                  {(selectedRun.actual_good_output_qty ?? selectedRun.actual_output_qty ?? '-')} / {(selectedRun.planned_yield_qty ?? selectedRun.planned_output_qty ?? 0)} units
                 </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Unit Cost Applied</span>
                 <span className="font-bold text-slate-900">
-                  ₹{selectedRun.costing?.cost_per_unit || '19.49'}/unit
+                  {selectedRun.costing?.cost_per_packet ? `₹${parseFloat(selectedRun.costing.cost_per_packet).toFixed(2)}/pkt` : selectedRun.costing?.cost_per_unit ? `₹${parseFloat(selectedRun.costing.cost_per_unit).toFixed(2)}/unit` : selectedRun.unit_cost ? `₹${parseFloat(selectedRun.unit_cost).toFixed(2)}/unit` : '—'}
                 </span>
               </div>
             </div>

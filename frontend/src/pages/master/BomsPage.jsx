@@ -20,10 +20,14 @@ export const BomsPage = () => {
       setError('');
       const res = await api.get('/boms');
       if (res.success && res.data) {
-        setBoms(res.data);
+        const raw = res.data?.boms ?? res.data;
+        setBoms(Array.isArray(raw) ? raw : []);
+      } else {
+        setBoms([]);
       }
     } catch (err) {
       setError(err.message || 'Failed to fetch BOMs');
+      setBoms([]);
     } finally {
       setLoading(false);
     }
@@ -33,7 +37,8 @@ export const BomsPage = () => {
     try {
       const res = await api.get(`/boms/${id}`);
       if (res.success && res.data) {
-        setSelectedBom(res.data);
+        const raw = res.data?.bom ?? res.data;
+        setSelectedBom(raw);
         setViewModalOpen(true);
       }
     } catch (err) {
@@ -126,11 +131,11 @@ export const BomsPage = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Finished Product</span>
-                <span className="font-semibold text-slate-900">{selectedBom.item_name}</span>
+                <span className="font-semibold text-slate-900">{selectedBom.item_name || selectedBom.finished_good_name || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Batch Size</span>
-                <span className="font-semibold text-slate-900">{selectedBom.output_quantity} Units</span>
+                <span className="font-semibold text-slate-900">{selectedBom.output_quantity ?? 1} Units</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
@@ -140,7 +145,7 @@ export const BomsPage = () => {
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Components Count</span>
-                <span className="font-semibold text-slate-900">{selectedBom.items?.length || 0} Ingredients</span>
+                <span className="font-semibold text-slate-900">{(Array.isArray(selectedBom.items) ? selectedBom.items.length : 0)} Ingredients</span>
               </div>
             </div>
 
@@ -160,11 +165,11 @@ export const BomsPage = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {selectedBom.items?.map((item, idx) => (
+                    {Array.isArray(selectedBom.items) && selectedBom.items.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="py-2 px-3 font-medium text-slate-900">
-                          {item.item_name}
-                          <span className="text-[10px] text-slate-400 block font-mono">{item.item_sku}</span>
+                          {item.item_name || item.name || '—'}
+                          <span className="text-[10px] text-slate-400 block font-mono">{item.item_sku || item.sku || ''}</span>
                         </td>
                         <td className="py-2 px-3">
                           <Badge variant={item.item_type === 'packaging' ? 'warning' : 'primary'}>
@@ -172,12 +177,12 @@ export const BomsPage = () => {
                           </Badge>
                         </td>
                         <td className="py-2 px-3 text-right font-mono font-semibold">
-                          {parseFloat(item.quantity_required).toFixed(4)}
+                          {parseFloat(item.quantity_required || item.quantity || 0).toFixed(4)}
                         </td>
                         <td className="py-2 px-3 text-right font-mono">
                           {parseFloat(item.scrap_factor_pct || 0)}%
                         </td>
-                        <td className="py-2 px-3">{item.uom_name || 'kg'}</td>
+                        <td className="py-2 px-3">{item.uom_name || item.uom_id || 'kg'}</td>
                       </tr>
                     ))}
                   </tbody>

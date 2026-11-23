@@ -23,13 +23,13 @@ END $$;
 -- 1. USERS & ROLES
 -- ----------------------------------------------------------------------------
 INSERT INTO users (id, username, password_hash, full_name, phone, role) VALUES
-('11111111-1111-1111-1111-111111111111', 'salesman_a', '$argon2id$v=19$m=65536,t=3,p=4$dummyhash', 'Salesman A (Tamil Nadu)', '9876543210', 'salesman'),
-('22222222-2222-2222-2222-222222222222', 'salesman_b', '$argon2id$v=19$m=65536,t=3,p=4$dummyhash', 'Salesman B (Karnataka)', '9876543211', 'salesman'),
-('33333333-3333-3333-3333-333333333333', 'admin_factory', '$argon2id$v=19$m=65536,t=3,p=4$dummyhash', 'Factory Admin Desk', '9876543212', 'factory_admin'),
-('44444444-4444-4444-4444-444444444444', 'supervisor_floor', '$argon2id$v=19$m=65536,t=3,p=4$dummyhash', 'Floor Supervisor', '9876543213', 'production_supervisor'),
-('55555555-5555-5555-5555-555555555555', 'auditor_ext', '$argon2id$v=19$m=65536,t=3,p=4$dummyhash', 'Statutory Auditor', '9876543214', 'auditor'),
-('66666666-6666-6666-6666-666666666666', 'owner_main', '$argon2id$v=19$m=65536,t=3,p=4$dummyhash', 'Managing Director', '9876543215', 'owner')
-ON CONFLICT (id) DO NOTHING;
+('11111111-1111-1111-1111-111111111111', 'salesman_a', '$2b$10$p2ROoxLNDM/h80KoW8Gq0uTIupNy4G50UNGLXAD2wfZleCAJN9ZfW', 'Salesman A (Tamil Nadu)', '9876543210', 'salesman'),
+('22222222-2222-2222-2222-222222222222', 'salesman_b', '$2b$10$p2ROoxLNDM/h80KoW8Gq0uTIupNy4G50UNGLXAD2wfZleCAJN9ZfW', 'Salesman B (Karnataka)', '9876543211', 'salesman'),
+('33333333-3333-3333-3333-333333333333', 'admin_factory', '$2b$10$p2ROoxLNDM/h80KoW8Gq0uTIupNy4G50UNGLXAD2wfZleCAJN9ZfW', 'Factory Admin Desk', '9876543212', 'factory_admin'),
+('44444444-4444-4444-4444-444444444444', 'supervisor_floor', '$2b$10$p2ROoxLNDM/h80KoW8Gq0uTIupNy4G50UNGLXAD2wfZleCAJN9ZfW', 'Floor Supervisor', '9876543213', 'production_supervisor'),
+('55555555-5555-5555-5555-555555555555', 'auditor_ext', '$2b$10$p2ROoxLNDM/h80KoW8Gq0uTIupNy4G50UNGLXAD2wfZleCAJN9ZfW', 'Statutory Auditor', '9876543214', 'auditor'),
+('66666666-6666-6666-6666-666666666666', 'owner_main', '$2b$10$p2ROoxLNDM/h80KoW8Gq0uTIupNy4G50UNGLXAD2wfZleCAJN9ZfW', 'Managing Director', '9876543215', 'owner')
+ON CONFLICT (id) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- ----------------------------------------------------------------------------
 -- 2. UNITS OF MEASURE
@@ -226,7 +226,7 @@ INSERT INTO invoices (
     '77777777-7777-7777-7777-777777777777',
     '2026-11-19',
     '33', false, 7500.00, 187.50, 187.50, 0.00,
-    7875.00, 'posted', '33333333-3333-3333-3333-333333333333'
+    7875.00, 'draft', '33333333-3333-3333-3333-333333333333'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO invoice_items (
@@ -242,6 +242,8 @@ INSERT INTO invoice_items (
     50.00, 7500.00, 5.00, 2.50, 187.50, 2.50, 187.50,
     0.00, 0.00, 7875.00
 ) ON CONFLICT (id) DO NOTHING;
+
+UPDATE invoices SET status = 'posted' WHERE id = 'fa000001-0000-0000-0000-000000000001';
 
 -- Dispatch Preparation
 INSERT INTO dispatches (

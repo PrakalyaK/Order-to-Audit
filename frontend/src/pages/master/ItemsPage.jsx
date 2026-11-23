@@ -39,13 +39,24 @@ export const ItemsPage = () => {
       if (search) params.search = search;
       if (itemType) params.item_type = itemType;
 
-      const [itemsRes, uomsRes] = await Promise.all([
+      const [itemsRes, uomsRes] = await Promise.allSettled([
         api.get('/items', { params }),
         api.get('/units'),
       ]);
 
-      if (itemsRes.success) setItems(itemsRes.data || []);
-      if (uomsRes.success) setUoms(uomsRes.data || []);
+      if (itemsRes.status === 'fulfilled' && itemsRes.value?.success) {
+        const raw = itemsRes.value.data?.items ?? itemsRes.value.data;
+        setItems(Array.isArray(raw) ? raw : []);
+      } else {
+        setItems([]);
+      }
+
+      if (uomsRes.status === 'fulfilled' && uomsRes.value?.success) {
+        const raw = uomsRes.value.data?.units ?? uomsRes.value.data;
+        setUoms(Array.isArray(raw) ? raw : []);
+      } else {
+        setUoms([]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch items');
     } finally {
@@ -128,9 +139,10 @@ export const ItemsPage = () => {
             className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Categories</option>
-            <option value="finished_goods">Finished Goods</option>
+            <option value="finished_good">Finished Goods</option>
             <option value="raw_material">Raw Materials</option>
             <option value="packaging">Packaging</option>
+            <option value="work_in_progress">Work in Progress</option>
           </select>
         </div>
       </div>
@@ -166,7 +178,7 @@ export const ItemsPage = () => {
                     <td className="py-3 px-4">
                       <Badge
                         variant={
-                          item.item_type === 'finished_goods'
+                          item.item_type === 'finished_good' || item.item_type === 'finished_goods'
                             ? 'purple'
                             : item.item_type === 'raw_material'
                             ? 'primary'
@@ -236,8 +248,9 @@ export const ItemsPage = () => {
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
                 <option value="raw_material">Raw Material</option>
-                <option value="finished_goods">Finished Good</option>
+                <option value="finished_good">Finished Good</option>
                 <option value="packaging">Packaging</option>
+                <option value="work_in_progress">Work in Progress</option>
               </select>
             </div>
             <div>

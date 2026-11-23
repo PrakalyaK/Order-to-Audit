@@ -21,10 +21,14 @@ export const InvoicesPage = () => {
       setError('');
       const res = await api.get('/invoices');
       if (res.success && res.data) {
-        setInvoices(res.data);
+        const raw = res.data?.invoices ?? res.data;
+        setInvoices(Array.isArray(raw) ? raw : []);
+      } else {
+        setInvoices([]);
       }
     } catch (err) {
       setError(err.message || 'Failed to fetch invoices');
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
@@ -38,7 +42,8 @@ export const InvoicesPage = () => {
     try {
       const res = await api.get(`/invoices/${id}`);
       if (res.success && res.data) {
-        setSelectedInvoice(res.data);
+        const raw = res.data?.invoice ?? res.data;
+        setSelectedInvoice(raw);
         setInvoiceModalOpen(true);
       }
     } catch (err) {
@@ -54,15 +59,38 @@ export const InvoicesPage = () => {
       // 1. Fetch full invoice items if not present
       const invDetails = await api.get(`/invoices/${inv.id}`);
       const fullInv = invDetails.data?.invoice || invDetails.data || inv;
-      const items = (fullInv.items || []).map((itm) => ({
-        itemId: itm.item_id,
-        batchNumber: 'BAT-MRK-20261119-01',
-        dispatchedQty: Number(itm.quantity),
-        uomId: itm.uom_id,
-      }));
+      const rawItems = fullInv.items || [];
 
-      // 2. Create dispatch
-      const dispatchRes = await api.post('/dispatches', {
+      // 2. Resolve real batch for each line item using FEFO recommendation or active batch list
+      const items = await Promise.all(
+        rawItems.map(async (itm) => {
+          let batchNo = 'BAT-MRK-20261119-01';
+          try {
+            const fefoRes = await api.get(`/batches/fefo/${itm.item_id}?quantity=${itm.quantity}`);
+            const recommendations = fefoRes.data?.recommendations || fefoRes.data?.allocations || fefoRes.data;
+            if (Array.isArray(recommendations) && recommendations.length > 0 && recommendations[0].batch_number) {
+              batchNo = recommendations[0].batch_number;
+            } else {
+              const bRes = await api.get(`/batches?item_id=${itm.item_id}`);
+              const bList = Array.isArray(bRes.data) ? bRes.data : bRes.data?.batches || [];
+              if (bList.length > 0 && bList[0].batch_number) {
+                batchNo = bList[0].batch_number;
+              }
+            }
+          } catch (e) {
+            console.warn('Batch lookup fallback:', e.message);
+          }
+          return {
+            itemId: itm.item_id,
+            batchNumber: batchNo,
+            dispatchedQty: Number(itm.quantity),
+            uomId: itm.uom_id,
+          };
+        })
+      );
+
+      // 3. Create dispatch
+      const dispatchPayload = {
         invoiceId: inv.id,
         carrierOrVehicleNo: 'TN-01-AB-1234',
         driverName: 'Logistics Transporter',
@@ -71,13 +99,14 @@ export const InvoicesPage = () => {
           batchNumber: 'BAT-MRK-20261119-01',
           dispatchedQty: 1,
         }],
-      });
+      };
+      const dispatchRes = await api.post('/dispatches', dispatchPayload);
       const dispatch = dispatchRes.data?.dispatch || dispatchRes.data;
       if (dispatch?.id) {
-        // 3. Post dispatch (deducts stock)
-        await api.post(`/dispatches/${dispatch.id}/post`);
-        // 4. Mark delivered
-        await api.post(`/dispatches/${dispatch.id}/deliver`);
+        // 4. Post dispatch (deducts stock)
+        await api.post(`/dispatches/${dispatch.id}/post`, {});
+        // 5. Mark delivered
+        await api.post(`/dispatches/${dispatch.id}/deliver`, {});
         alert('Dispatch executed and delivered! Inventory deducted at Moving WAC.');
         fetchInvoices();
       }
@@ -145,8 +174,9 @@ export const InvoicesPage = () => {
                     parseFloat(inv.cgst_amount || 0) +
                     parseFloat(inv.sgst_amount || 0) +
                     parseFloat(inv.igst_amount || 0);
-                  const total = parseFloat(inv.total_amount || 0);
-                  const paid = parseFloat(inv.paid_amount || 0);
+                  const total = parseFloat(inv.total_invoice_value ?? inv.total_amount ?? 0);
+                  const subtotal = parseFloat(inv.taxable_value ?? inv.subtotal_amount ?? 0);
+                  const paid = parseFloat(inv.total_paid_amount ?? inv.paid_amount ?? 0);
 
                   return (
                     <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
@@ -154,7 +184,7 @@ export const InvoicesPage = () => {
                       <td className="py-3 px-4 font-semibold text-slate-900">{inv.customer_name}</td>
                       <td className="py-3 px-4 text-slate-500">{inv.invoice_date}</td>
                       <td className="py-3 px-4 text-right font-medium">
-                        ₹{parseFloat(inv.subtotal_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-4 text-right text-slate-500">
                         ₹{gstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -260,15 +290,15 @@ export const InvoicesPage = () => {
                   <div className="flex justify-between">
                     <span className="text-slate-500">Paid to Date:</span>
                     <span className="font-mono font-medium text-emerald-600">
-                      ₹{parseFloat(selectedInvoice.paid_amount || 0).toFixed(2)}
+                      ₹{parseFloat(selectedInvoice.total_paid_amount || selectedInvoice.paid_amount || 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Balance Due:</span>
                     <span className="font-mono font-bold text-rose-600">
                       ₹{(
-                        parseFloat(selectedInvoice.total_amount || 0) -
-                        parseFloat(selectedInvoice.paid_amount || 0)
+                        parseFloat(selectedInvoice.total_invoice_value || selectedInvoice.total_amount || 0) -
+                        parseFloat(selectedInvoice.total_paid_amount || selectedInvoice.paid_amount || 0)
                       ).toFixed(2)}
                     </span>
                   </div>
@@ -291,25 +321,25 @@ export const InvoicesPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {selectedInvoice.items?.map((item, idx) => (
+                  {Array.isArray(selectedInvoice.items) && selectedInvoice.items.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50">
                       <td className="py-2.5 px-3 font-medium text-slate-900">
-                        {item.item_name}
-                        <span className="text-[10px] text-slate-400 block font-mono">{item.item_sku}</span>
+                        {item.item_name_snapshot || item.item_name || 'Goods'}
+                        <span className="text-[10px] text-slate-400 block font-mono">{item.item_sku || ''}</span>
                       </td>
-                      <td className="py-2.5 px-3 font-mono">{item.hsn_code || '1905'}</td>
+                      <td className="py-2.5 px-3 font-mono">{item.hsn_code_snapshot || item.hsn_code || '1905'}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-medium">
-                        {parseFloat(item.quantity).toFixed(2)}
+                        {parseFloat(item.quantity || 0).toFixed(2)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono">
-                        ₹{parseFloat(item.unit_price).toFixed(2)}
+                        ₹{parseFloat(item.unit_price || 0).toFixed(2)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono">
-                        ₹{parseFloat(item.taxable_amount || item.quantity * item.unit_price).toFixed(2)}
+                        ₹{parseFloat(item.taxable_value || item.taxable_amount || (item.quantity * item.unit_price) || 0).toFixed(2)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono">{item.gst_rate_pct || 12}%</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                        ₹{parseFloat(item.total_amount).toFixed(2)}
+                        ₹{parseFloat(item.total_item_value || item.total_amount || 0).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -323,7 +353,7 @@ export const InvoicesPage = () => {
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500">Taxable Subtotal:</span>
                   <span className="font-mono font-medium">
-                    ₹{parseFloat(selectedInvoice.subtotal_amount).toFixed(2)}
+                    ₹{parseFloat(selectedInvoice.taxable_value || selectedInvoice.subtotal_amount || 0).toFixed(2)}
                   </span>
                 </div>
                 {parseFloat(selectedInvoice.cgst_amount || 0) > 0 && (
@@ -353,7 +383,7 @@ export const InvoicesPage = () => {
                 <div className="flex justify-between py-2 border-t-2 border-slate-900 text-sm font-bold text-slate-900">
                   <span>Total Invoiced Amount:</span>
                   <span className="font-mono">
-                    ₹{parseFloat(selectedInvoice.total_amount).toFixed(2)}
+                    ₹{parseFloat(selectedInvoice.total_invoice_value || selectedInvoice.total_amount || 0).toFixed(2)}
                   </span>
                 </div>
               </div>

@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, DEMO_PERSONAS } from '../../context/AuthContext';
-import { LogOut, Shield, ChevronDown, CheckCircle2, UserCircle2 } from 'lucide-react';
+import { LogOut, Shield, ChevronDown, CheckCircle2, UserCircle2, AlertCircle } from 'lucide-react';
 
 export const Header = () => {
   const { user, logout, demoLogin } = useAuth();
+  const navigate = useNavigate();
+  const [errorMsg, setErrorMsg] = useState(null);
 
   const handleRoleChange = async (e) => {
     const selectedUsername = e.target.value;
     if (selectedUsername && selectedUsername !== user?.username) {
-      await demoLogin(selectedUsername);
+      try {
+        setErrorMsg(null);
+        await demoLogin(selectedUsername);
+        navigate('/dashboard');
+      } catch (err) {
+        const msg = err.message || 'Failed to switch user persona';
+        setErrorMsg(msg);
+        alert(`Role switch error: ${msg}`);
+      }
     }
   };
 

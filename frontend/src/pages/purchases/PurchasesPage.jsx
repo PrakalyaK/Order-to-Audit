@@ -36,17 +36,40 @@ export const PurchasesPage = () => {
     try {
       setLoading(true);
       setError('');
-      const [billsRes, partiesRes, itemsRes, whRes] = await Promise.all([
+      const [billsRes, partiesRes, itemsRes, whRes] = await Promise.allSettled([
         api.get('/purchases'),
         api.get('/parties?party_type=supplier'),
         api.get('/items'),
         api.get('/warehouses'),
       ]);
 
-      if (billsRes.success) setBills(billsRes.data || []);
-      if (partiesRes.success) setSuppliers(partiesRes.data || []);
-      if (itemsRes.success) setItems(itemsRes.data || []);
-      if (whRes.success) setWarehouses(whRes.data || []);
+      if (billsRes.status === 'fulfilled' && billsRes.value?.success) {
+        const raw = billsRes.value.data?.purchases ?? billsRes.value.data;
+        setBills(Array.isArray(raw) ? raw : []);
+      } else {
+        setBills([]);
+      }
+
+      if (partiesRes.status === 'fulfilled' && partiesRes.value?.success) {
+        const raw = partiesRes.value.data?.parties ?? partiesRes.value.data;
+        setSuppliers(Array.isArray(raw) ? raw : []);
+      } else {
+        setSuppliers([]);
+      }
+
+      if (itemsRes.status === 'fulfilled' && itemsRes.value?.success) {
+        const raw = itemsRes.value.data?.items ?? itemsRes.value.data;
+        setItems(Array.isArray(raw) ? raw : []);
+      } else {
+        setItems([]);
+      }
+
+      if (whRes.status === 'fulfilled' && whRes.value?.success) {
+        const raw = whRes.value.data?.warehouses ?? whRes.value.data;
+        setWarehouses(Array.isArray(raw) ? raw : []);
+      } else {
+        setWarehouses([]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to fetch purchases');
     } finally {
@@ -62,7 +85,8 @@ export const PurchasesPage = () => {
     try {
       const res = await api.get(`/purchases/${id}`);
       if (res.success && res.data) {
-        setSelectedBill(res.data);
+        const raw = res.data?.purchase ?? res.data;
+        setSelectedBill(raw);
         setViewModalOpen(true);
       }
     } catch (err) {
@@ -258,22 +282,22 @@ export const PurchasesPage = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Supplier</span>
-                <span className="font-semibold text-slate-900">{selectedBill.supplier_name}</span>
+                <span className="font-semibold text-slate-900">{selectedBill.supplier_name || selectedBill.trade_name || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Date</span>
-                <span className="font-semibold text-slate-900">{selectedBill.bill_date}</span>
+                <span className="font-semibold text-slate-900">{selectedBill.bill_date || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
                 <Badge variant={selectedBill.status === 'received' ? 'success' : 'default'}>
-                  {selectedBill.status.toUpperCase()}
+                  {(selectedBill.status || 'DRAFT').toUpperCase()}
                 </Badge>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Payable</span>
                 <span className="font-bold text-slate-900">
-                  ₹{parseFloat(selectedBill.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{parseFloat(selectedBill.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -294,18 +318,18 @@ export const PurchasesPage = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {selectedBill.items?.map((item, idx) => (
+                    {Array.isArray(selectedBill.items) && selectedBill.items.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50">
-                        <td className="py-2 px-3 font-medium text-slate-900">{item.item_name}</td>
-                        <td className="py-2 px-3 font-mono text-[11px]">{item.batch_number || '-'}</td>
+                        <td className="py-2 px-3 font-medium text-slate-900">{item.item_name || item.name || 'Item'}</td>
+                        <td className="py-2 px-3 font-mono text-[11px]">{item.supplier_batch_no || item.batch_number || '-'}</td>
                         <td className="py-2 px-3 text-right font-mono font-medium">
-                          {parseFloat(item.quantity).toFixed(2)}
+                          {parseFloat(item.quantity || 0).toFixed(2)}
                         </td>
                         <td className="py-2 px-3 text-right font-mono">
-                          ₹{parseFloat(item.rate).toFixed(2)}
+                          ₹{parseFloat(item.unit_rate || item.rate || 0).toFixed(2)}
                         </td>
                         <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                          ₹{parseFloat(item.total_amount || item.quantity * item.rate).toFixed(2)}
+                          ₹{parseFloat(item.total_amount || (item.quantity * (item.unit_rate || item.rate || 0)) || 0).toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -363,7 +387,7 @@ export const PurchasesPage = () => {
                 <option value="">Select Supplier...</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.party_name}
+                    {s.trade_name || s.party_name}
                   </option>
                 ))}
               </select>

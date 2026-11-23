@@ -50,13 +50,20 @@ export const errorHandler = (err, req, res, next) => {
       case 'P0001': // raise_exception (from PL/pgSQL business rules)
         error = new ApiError(400, err.message || 'Business rule constraint failure');
         break;
+      case '22P02': // invalid_text_representation (e.g. invalid UUID format)
+        error = ApiError.badRequest('Invalid input identifier or format syntax');
+        break;
       case '08001':
       case '08006':
       case 'ECONNREFUSED':
         error = ApiError.serviceUnavailable('Database service is temporarily unavailable. Please try again later.');
         break;
       default:
-        if (!error.statusCode) {
+        if (typeof err.code === 'string' && err.code.startsWith('22')) {
+          error = ApiError.badRequest(
+            isDev ? `Invalid data format (${err.code}): ${err.message}` : 'Invalid data format or identifier provided.'
+          );
+        } else if (!error.statusCode) {
           error = ApiError.internal(
             isDev ? (err.message || 'Database error occurred') : 'An unexpected database error occurred.'
           );

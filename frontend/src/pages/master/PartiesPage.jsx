@@ -42,10 +42,14 @@ export const PartiesPage = () => {
       if (search) params.search = search;
       const res = await api.get('/parties', { params });
       if (res.success && res.data) {
-        setParties(res.data);
+        const raw = res.data?.parties ?? res.data;
+        setParties(Array.isArray(raw) ? raw : []);
+      } else {
+        setParties([]);
       }
     } catch (err) {
       setError(err.message || 'Failed to fetch parties');
+      setParties([]);
     } finally {
       setLoading(false);
     }
@@ -168,8 +172,8 @@ export const PartiesPage = () => {
                 {parties.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4">
-                      <span className="font-semibold text-slate-900 block">{p.party_name}</span>
-                      <span className="text-[11px] text-slate-400">{p.legal_name || p.city}</span>
+                      <span className="font-semibold text-slate-900 block">{p.trade_name || p.party_name}</span>
+                      <span className="text-[11px] text-slate-400">{p.legal_name || p.state_name || p.city}</span>
                     </td>
                     <td className="py-3 px-4">
                       <Badge variant={p.party_type === 'customer' ? 'primary' : 'warning'}>

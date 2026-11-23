@@ -243,10 +243,10 @@ export const reportsRepository = {
           i.name AS material_name,
           i.sku AS material_sku,
           pri.actual_issued_qty AS quantity_used,
-          u.code AS uom
+          u.id AS uom
         FROM production_run_inputs pri
         JOIN items i ON pri.item_id = i.id
-        LEFT JOIN units u ON pri.uom_id = u.id
+        LEFT JOIN units_of_measure u ON pri.uom_id = u.id
         WHERE pri.production_run_id = $1;
       `, [productionRun.production_run_id]);
       inputs = inputsRes.rows;
@@ -256,12 +256,12 @@ export const reportsRepository = {
     const purchaseRes = await query(`
       SELECT 
         pb.id, pb.bill_number, pb.bill_date, p.trade_name AS supplier_name,
-        pbi.quantity, pbi.rate, i.name AS item_name, i.sku
+        pbi.quantity, pbi.unit_rate AS rate, i.name AS item_name, i.sku
       FROM purchase_bill_items pbi
       JOIN purchase_bills pb ON pbi.purchase_bill_id = pb.id
       JOIN parties p ON pb.supplier_id = p.id
       JOIN items i ON pbi.item_id = i.id
-      WHERE pbi.batch_number = $1;
+      WHERE pbi.supplier_batch_no = $1;
     `, [batchNumber]);
 
     // 3. Check customer dispatches & invoices for this batch

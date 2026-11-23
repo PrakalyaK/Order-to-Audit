@@ -53,9 +53,9 @@ export const createRateLimiter = ({
   return limiter;
 };
 
-// Default login rate limiter: 5 attempts per 15 minutes
+// Default login rate limiter: 5 attempts per 15 minutes in production; relaxed in dev/test
 export const loginRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 5 : 500,
   message: 'Too many login attempts. Please try again after 15 minutes.',
 });
