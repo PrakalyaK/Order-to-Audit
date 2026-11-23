@@ -41,4 +41,5 @@ export const env = {
     saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10,
   },
   factoryStateCode: process.env.FACTORY_STATE_CODE || '33',
+  enableDemoLogin: process.env.ENABLE_DEMO_LOGIN === 'true' || process.env.NODE_ENV !== 'production',
 };

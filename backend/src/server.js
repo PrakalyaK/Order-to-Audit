@@ -1,6 +1,7 @@
 import app from './app.js';
 import { env } from './config/env.js';
 import { testConnection, closePool } from './config/db.js';
+import { runAutoMigrations } from './scripts/autoMigrate.js';
 
 let server;
 
@@ -17,18 +18,21 @@ const startServer = async () => {
     console.log(`Database Target: ${env.db.database} on ${env.db.host}:${env.db.port}`);
 
     // Verify PostgreSQL connectivity before binding listener
-    console.log('\n[1/2] Testing PostgreSQL connection pool...');
+    console.log('\n[1/3] Testing PostgreSQL connection pool...');
     try {
       const dbInfo = await testConnection();
       console.log(`[OK] Connected to PostgreSQL in ${dbInfo.durationMs}ms`);
       console.log(`     Server Time: ${dbInfo.serverTime}`);
+
+      console.log('\n[2/3] Verifying database schema & migrations...');
+      await runAutoMigrations();
     } catch (dbErr) {
-      console.error(`[WARN] PostgreSQL initial connection test failed: ${dbErr.message}`);
+      console.error(`[WARN] PostgreSQL initialization failed: ${dbErr.message}`);
       console.error('       The server will start, but database operations may fail until connectivity is restored.');
     }
 
     // Start Express HTTP server
-    console.log('\n[2/2] Starting Express HTTP listener...');
+    console.log('\n[3/3] Starting Express HTTP listener...');
     server = app.listen(env.port, () => {
       console.log(`[OK] Server listening on http://localhost:${env.port}`);
       console.log(`     Health check: http://localhost:${env.port}${env.apiPrefix}/health`);

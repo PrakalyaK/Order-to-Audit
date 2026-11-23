@@ -1,0 +1,25 @@
+{
+  "name": "order-to-audit",
+  "version": "1.0.0",
+  "description": "Order-to-Audit Food Manufacturing ERP System",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm start --prefix backend",
+    "dev": "npm run dev --prefix backend",
+    "test": "npm test --prefix backend",
+    "build": "npm run build --prefix frontend",
+    "db:setup": "npm run db:setup --prefix backend",
+    "db:reset": "npm run db:reset --prefix backend"
+  },
+  "keywords": [
+    "erp",
+    "food-manufacturing",
+    "gst",
+    "inventory",
+    "accounting",
+    "audit-ledger"
+  ],
+  "author": "NIT Tiruchirappalli Internship Evaluation",
+  "license": "ISC"
+}
