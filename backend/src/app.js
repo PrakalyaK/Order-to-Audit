@@ -37,7 +37,23 @@ const app = express();
 // ============================================================================
 
 // HTTP header security
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        fontSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        upgradeInsecureRequests: null, // Do not upgrade to HTTPS on local HTTP port 5000
+      },
+    },
+    strictTransportSecurity: false, // Do not enforce HSTS on localhost
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // Cross-Origin Resource Sharing
 app.use(
@@ -71,8 +87,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 2. ROOT & HEALTH ROUTES
 // ============================================================================
 
-// Base API information endpoint
-app.get('/', (req, res) => {
+// Base API information endpoint (serves React SPA for browser navigations, JSON API info for API clients)
+app.get('/', (req, res, next) => {
+  if (req.headers.accept && req.headers.accept.includes('text/html') && !req.headers.accept.startsWith('*/*') && fs.existsSync(frontendDist)) {
+    return res.sendFile(path.join(frontendDist, 'index.html'));
+  }
   res.status(200).json({
     name: 'Order-to-Audit Manufacturing API',
     version: '1.0.0',

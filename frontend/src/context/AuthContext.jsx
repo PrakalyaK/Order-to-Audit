@@ -66,16 +66,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const demoLogin = async (username) => {
-    const res = await api.post('/auth/demo-login', { username });
-    if (res.success && res.data) {
-      const { user: loggedInUser, token: authToken } = res.data;
-      setUser(loggedInUser);
-      setToken(authToken);
-      localStorage.setItem('ota_token', authToken);
-      localStorage.setItem('ota_user', JSON.stringify(loggedInUser));
-      return loggedInUser;
-    }
-    throw new Error(res.message || 'Demo login failed');
+    return login(username, 'Password@123');
   };
 
   const logout = () => {
