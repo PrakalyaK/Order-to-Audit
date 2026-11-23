@@ -1,9 +1,13 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { authService } from './auth.service.js';
+import { loginRateLimiter } from '../../middleware/rateLimiter.middleware.js';
 
 export const login = asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   const result = await authService.login(username, password);
+
+  // Clear rate limiter upon successful authentication
+  loginRateLimiter.reset();
 
   res.status(200).json({
     success: true,
@@ -15,6 +19,8 @@ export const login = asyncHandler(async (req, res) => {
 export const demoLogin = asyncHandler(async (req, res) => {
   const { username } = req.body;
   const result = await authService.demoLogin(username || 'owner_main');
+
+  loginRateLimiter.reset();
 
   res.status(200).json({
     success: true,
