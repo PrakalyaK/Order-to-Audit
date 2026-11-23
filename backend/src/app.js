@@ -2,6 +2,9 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { env } from './config/env.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import itemsRoutes from './modules/items/items.routes.js';
@@ -105,7 +108,29 @@ app.use(`${env.apiPrefix}/health`, healthRoutes);
 app.use('/health', healthRoutes);
 
 // ============================================================================
-// 3. ERROR HANDLING MIDDLEWARES
+// 3. FRONTEND PRODUCTION STATIC ASSETS & SPA ROUTING
+// ============================================================================
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path === '/health') {
+      return next();
+    }
+    // If request does not accept HTML (e.g. API clients hitting /), skip to 404
+    if (!req.accepts('html')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
+
+// ============================================================================
+// 4. ERROR HANDLING MIDDLEWARES
 // ============================================================================
 
 // 404 Handler for undefined routes

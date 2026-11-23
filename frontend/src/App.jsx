@@ -1,122 +1,167 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, ROLES } from './context/AuthContext';
+import { Layout } from './components/layout/Layout';
+import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { NotFound } from './components/layout/NotFound';
+
+// Pages
+import { LoginPage } from './pages/auth/LoginPage';
+import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { ItemsPage } from './pages/master/ItemsPage';
+import { BomsPage } from './pages/master/BomsPage';
+import { PartiesPage } from './pages/master/PartiesPage';
+import { WarehousesPage } from './pages/master/WarehousesPage';
+import { UsersPage } from './pages/master/UsersPage';
+import { PurchasesPage } from './pages/purchases/PurchasesPage';
+import { InventoryPage } from './pages/inventory/InventoryPage';
+import { ProductionPage } from './pages/production/ProductionPage';
+import { SalesOrdersPage } from './pages/sales/SalesOrdersPage';
+import { InvoicesPage } from './pages/sales/InvoicesPage';
+import { CustomerPaymentsPage } from './pages/payments/CustomerPaymentsPage';
+import { SupplierPaymentsPage } from './pages/payments/SupplierPaymentsPage';
+import { AccountingPage } from './pages/accounting/AccountingPage';
+import { ReportsPage } from './pages/reports/ReportsPage';
+import { AuditLogsPage } from './pages/audit/AuditLogsPage';
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public login */}
+          <Route path="/login" element={<LoginPage />} />
 
-      <div className="ticks"></div>
+          {/* Protected layout routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            
+            {/* Core Operations */}
+            <Route path="dashboard" element={<DashboardPage />} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            {/* Master Data */}
+            <Route path="master/items" element={<ItemsPage />} />
+            <Route path="master/boms" element={<BomsPage />} />
+            <Route path="master/parties" element={<PartiesPage />} />
+            <Route
+              path="master/warehouses"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <WarehousesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="master/users"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR]}>
+                  <UsersPage />
+                </ProtectedRoute>
+              }
+            />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            {/* Supply & Production */}
+            <Route
+              path="purchases"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR]}>
+                  <PurchasesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="inventory"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <InventoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="production"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <ProductionPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Sales & Billing */}
+            <Route
+              path="sales/orders"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR]}>
+                  <SalesOrdersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="sales/invoices"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR]}>
+                  <InvoicesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Payments & Receivables / Payables */}
+            <Route
+              path="payments/customers"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR]}>
+                  <CustomerPaymentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="payments/suppliers"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR]}>
+                  <SupplierPaymentsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Finance & Compliance */}
+            <Route
+              path="accounting"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR]}>
+                  <AccountingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="audit"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR]}>
+                  <AuditLogsPage />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
+
+          {/* 404 Route */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
 
-export default App
+export default App;
