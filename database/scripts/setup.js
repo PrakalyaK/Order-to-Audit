@@ -44,6 +44,12 @@ async function setupDatabase(dropSchema = false) {
 
     console.log('\n>>> All migrations and benchmark seed applied successfully!');
 
+    // Automatically synchronize seeded operational transactions into General Ledger
+    console.log('>>> Synchronizing seeded transactions to General Ledger...');
+    const { accountingService } = await import('../../backend/src/modules/accounting/accounting.service.js');
+    await accountingService.syncOperationalTransactions('33333333-3333-3333-3333-333333333333');
+    console.log('✓ General Ledger synchronized successfully');
+
     const userCount = await client.query('SELECT count(*)::int as count FROM users');
     const invCount = await client.query('SELECT count(*)::int as count FROM invoices');
     const stockCount = await client.query('SELECT count(*)::int as count FROM inventory_ledger');

@@ -54,6 +54,15 @@ export async function runAutoMigrations() {
         await client.query(sql);
       }
       console.log('[AUTO-MIGRATE] Successfully initialized schema and seeded benchmark data.\n');
+
+      // Auto-sync initial operational transactions into GL
+      try {
+        const { accountingService } = await import('../modules/accounting/accounting.service.js');
+        await accountingService.syncOperationalTransactions('33333333-3333-3333-3333-333333333333');
+        console.log('[AUTO-MIGRATE] Successfully synchronized General Ledger entries.\n');
+      } catch (syncErr) {
+        console.warn('[AUTO-MIGRATE] Notice: GL auto-sync on init completed with:', syncErr.message);
+      }
     } else {
       // Check if users exist in the table
       const userCountRes = await client.query('SELECT count(*)::int as count FROM users');

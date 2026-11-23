@@ -80,6 +80,11 @@ export const ReportsPage = () => {
             GSTR Outward Supplies register, Customer Receivables Ageing, Production Variances, and End-to-End Batch Trees
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" icon={Printer} onClick={() => window.print()}>
+            Print / Export PDF
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}

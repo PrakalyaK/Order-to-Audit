@@ -262,7 +262,7 @@ export const SalesOrdersPage = () => {
         maxWidth="max-w-3xl"
       >
         <form onSubmit={handleCreateOrder} className="space-y-4 text-xs">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Customer *</label>
               <select
