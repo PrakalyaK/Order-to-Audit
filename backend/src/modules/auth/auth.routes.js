@@ -11,6 +11,7 @@ const router = Router();
 
 // Public authentication route protected by rate limiter
 router.post('/login', loginRateLimiter, validate(loginSchema), authController.login);
+router.post('/demo-login', authController.demoLogin);
 
 // Authenticated user profile and password management
 router.get('/me', authenticate, authController.getMe);

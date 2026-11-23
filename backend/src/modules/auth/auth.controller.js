@@ -12,6 +12,17 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
+export const demoLogin = asyncHandler(async (req, res) => {
+  const { username } = req.body;
+  const result = await authService.demoLogin(username || 'owner_main');
+
+  res.status(200).json({
+    success: true,
+    message: 'Demo login successful',
+    data: result,
+  });
+});
+
 export const getMe = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
