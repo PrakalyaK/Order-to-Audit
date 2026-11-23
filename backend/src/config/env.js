@@ -21,7 +21,7 @@ export const env = {
   apiPrefix: process.env.API_PREFIX || '/api/v1',
   corsOrigin: process.env.CORS_ORIGIN 
     ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()) 
-    : ['http://localhost:3000', 'http://localhost:5173'],
+    : ['http://localhost:5000', 'http://localhost:5173', 'http://localhost:3000'],
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT, 10) || 5432,

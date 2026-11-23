@@ -61,7 +61,8 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g. mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (env.corsOrigin.includes('*') || env.corsOrigin.includes(origin)) {
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      if (env.corsOrigin.includes('*') || env.corsOrigin.includes(origin) || isLocalhost) {
         return callback(null, true);
       }
       return callback(new Error(`CORS policy does not allow access from origin: ${origin}`));
