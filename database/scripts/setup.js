@@ -20,6 +20,7 @@ const MIGRATION_FILES = [
   'database/migrations/010_financial_accounting.sql',
   'database/migrations/011_advanced_erp_operations.sql',
   'database/seeds/benchmark_seed.sql',
+  'database/migrations/012_sample_products_and_boms.sql',
 ];
 
 async function setupDatabase(dropSchema = false) {

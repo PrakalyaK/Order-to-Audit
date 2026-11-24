@@ -45,9 +45,23 @@ export const bomsRepository = {
         b.standard_batch_size, b.batch_uom_id, b.tolerance_variance_pct,
         b.is_active, b.effective_from, b.effective_to, b.notes,
         b.created_by, b.created_at,
-        i.name AS finished_good_name, i.sku AS finished_good_sku,
+        i.name AS finished_good_name, i.sku AS finished_good_sku, i.image_url AS finished_good_image_url,
         u.name AS batch_uom_name,
-        (SELECT COUNT(*) FROM bom_items bi WHERE bi.bom_id = b.id) AS material_items_count
+        (SELECT COUNT(*) FROM bom_items bi WHERE bi.bom_id = b.id) AS material_items_count,
+        COALESCE((
+          SELECT ROUND(SUM(bi.standard_qty * COALESCE(NULLIF(isb.current_moving_wac, 0), i_mat.standard_purchase_rate, 0)), 2)
+          FROM bom_items bi
+          JOIN items i_mat ON bi.item_id = i_mat.id
+          LEFT JOIN item_stock_balances isb ON bi.item_id = isb.item_id
+          WHERE bi.bom_id = b.id
+        ), 0.00) AS estimated_material_cost,
+        COALESCE((
+          SELECT ROUND(SUM(bi.standard_qty * COALESCE(NULLIF(isb.current_moving_wac, 0), i_mat.standard_purchase_rate, 0)) / NULLIF(b.standard_batch_size, 0), 4)
+          FROM bom_items bi
+          JOIN items i_mat ON bi.item_id = i_mat.id
+          LEFT JOIN item_stock_balances isb ON bi.item_id = isb.item_id
+          WHERE bi.bom_id = b.id
+        ), 0.0000) AS estimated_cost_per_unit
       FROM boms b
       JOIN items i ON b.finished_good_item_id = i.id
       JOIN units_of_measure u ON b.batch_uom_id = u.id
@@ -79,6 +93,7 @@ export const bomsRepository = {
         b.is_active, b.effective_from, b.effective_to, b.notes,
         b.created_by, b.created_at,
         i.name AS finished_good_name, i.sku AS finished_good_sku, i.base_uom_id AS finished_good_base_uom,
+        i.image_url AS finished_good_image_url,
         u.name AS batch_uom_name,
         creator.username AS created_by_username
       FROM boms b
@@ -96,17 +111,31 @@ export const bomsRepository = {
       SELECT 
         bi.id, bi.bom_id, bi.item_id, bi.standard_qty, bi.uom_id, bi.scrap_allowance_pct,
         i.name AS item_name, i.sku AS item_sku, i.item_type, i.base_uom_id AS item_base_uom,
+        i.standard_purchase_rate AS material_standard_rate,
+        COALESCE(NULLIF(isb.current_moving_wac, 0), i.standard_purchase_rate, 0) AS current_moving_wac,
+        ROUND((bi.standard_qty * COALESCE(NULLIF(isb.current_moving_wac, 0), i.standard_purchase_rate, 0)), 2) AS line_estimated_cost,
+        COALESCE(isb.current_base_qty, 0) AS current_available_stock,
         u.name AS uom_name, u.dimension AS uom_dimension
       FROM bom_items bi
       JOIN items i ON bi.item_id = i.id
       JOIN units_of_measure u ON bi.uom_id = u.id
+      LEFT JOIN item_stock_balances isb ON bi.item_id = isb.item_id
       WHERE bi.bom_id = $1
-      ORDER BY i.name ASC;
+      ORDER BY i.item_type DESC, i.name ASC;
     `;
     const itemsRes = await query(itemsSql, [id]);
     bom.materials = itemsRes.rows;
 
     return bom;
+  },
+
+  /**
+   * Get the next incremental version number for a finished good item
+   */
+  async getNextVersionNumber(finishedGoodItemId) {
+    const text = 'SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM boms WHERE finished_good_item_id = $1;';
+    const res = await query(text, [finishedGoodItemId]);
+    return parseInt(res.rows[0].next_version, 10);
   },
 
   /**

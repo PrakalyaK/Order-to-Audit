@@ -1,6 +1,7 @@
 import { bomsRepository } from './boms.repository.js';
 import { itemsRepository } from '../items/items.repository.js';
 import { unitsRepository } from '../units/units.repository.js';
+import { inventoryRepository } from '../inventory/inventory.repository.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ITEM_TYPES } from '../items/items.constants.js';
 
@@ -52,15 +53,19 @@ export const bomsService = {
       );
     }
 
-    // Check version uniqueness for this finished good
-    const existingVersion = await bomsRepository.findByProductAndVersion(
-      bomHeader.finished_good_item_id,
-      bomHeader.version_number
-    );
-    if (existingVersion) {
-      throw ApiError.conflict(
-        `BOM version ${bomHeader.version_number} already exists for product '${finishedGood.sku}'`
+    // Check version uniqueness or auto-increment for this finished good
+    if (!bomHeader.version_number) {
+      bomHeader.version_number = await bomsRepository.getNextVersionNumber(bomHeader.finished_good_item_id);
+    } else {
+      const existingVersion = await bomsRepository.findByProductAndVersion(
+        bomHeader.finished_good_item_id,
+        bomHeader.version_number
       );
+      if (existingVersion) {
+        throw ApiError.conflict(
+          `BOM version ${bomHeader.version_number} already exists for product '${finishedGood.sku}'`
+        );
+      }
     }
 
     // Validate materials
@@ -272,28 +277,41 @@ export const bomsService = {
     // Scale factor: (Normalized output / BOM standard batch size)
     const scaleFactor = Math.round((normalizedOutputQty / standardBatchSize) * 10000) / 10000;
 
-    const calculatedMaterials = bom.materials.map((mat) => {
-      const baseQtyPerBatch = parseFloat(mat.standard_qty);
-      const scrapPct = parseFloat(mat.scrap_allowance_pct || 0);
+    const calculatedMaterials = await Promise.all(
+      bom.materials.map(async (mat) => {
+        const baseQtyPerBatch = parseFloat(mat.standard_qty);
+        const scrapPct = parseFloat(mat.scrap_allowance_pct || 0);
 
-      const plannedRequiredQty = Math.round(baseQtyPerBatch * scaleFactor * 10000) / 10000;
-      const scrapAllowanceQty = Math.round(plannedRequiredQty * (scrapPct / 100) * 10000) / 10000;
-      const totalRequiredWithScrap = Math.round((plannedRequiredQty + scrapAllowanceQty) * 10000) / 10000;
+        const plannedRequiredQty = Math.round(baseQtyPerBatch * scaleFactor * 10000) / 10000;
+        const scrapAllowanceQty = Math.round(plannedRequiredQty * (scrapPct / 100) * 10000) / 10000;
+        const totalRequiredWithScrap = Math.round((plannedRequiredQty + scrapAllowanceQty) * 10000) / 10000;
 
-      return {
-        item_id: mat.item_id,
-        item_sku: mat.item_sku,
-        item_name: mat.item_name,
-        item_type: mat.item_type,
-        standard_qty_per_batch: baseQtyPerBatch,
-        uom_id: mat.uom_id,
-        uom_name: mat.uom_name,
-        planned_required_qty: plannedRequiredQty,
-        scrap_allowance_pct: scrapPct,
-        scrap_allowance_qty: scrapAllowanceQty,
-        total_required_qty: totalRequiredWithScrap,
-      };
-    });
+        // Fetch live available stock
+        const stock = await inventoryRepository.findStockByItemId(mat.item_id);
+        const availableQty = stock ? parseFloat(stock.closing_stock_base_qty || stock.current_base_qty || 0) : 0.0000;
+        const shortageQty = Math.max(0, Math.round((totalRequiredWithScrap - availableQty) * 10000) / 10000);
+        const hasSufficientStock = availableQty >= totalRequiredWithScrap;
+
+        return {
+          item_id: mat.item_id,
+          item_sku: mat.item_sku,
+          item_name: mat.item_name,
+          item_type: mat.item_type,
+          standard_qty_per_batch: baseQtyPerBatch,
+          uom_id: mat.uom_id,
+          uom_name: mat.uom_name,
+          planned_required_qty: plannedRequiredQty,
+          scrap_allowance_pct: scrapPct,
+          scrap_allowance_qty: scrapAllowanceQty,
+          total_required_qty: totalRequiredWithScrap,
+          available_stock_qty: availableQty,
+          shortage_qty: shortageQty,
+          has_sufficient_stock: hasSufficientStock,
+        };
+      })
+    );
+
+    const allMaterialsAvailable = calculatedMaterials.every((m) => m.has_sufficient_stock);
 
     return {
       bom_id: bom.id,
@@ -318,7 +336,8 @@ export const bomsService = {
       requested_output_qty: requestedOutputQty,
       requested_output_uom_id: targetOutputUomId,
       materials: calculatedMaterials,
-      note: 'Purely mathematical planning requirement calculation. No inventory was deducted or altered.',
+      all_materials_available: allMaterialsAvailable,
+      note: 'Purely mathematical planning requirement calculation with live stock reconciliation.',
     };
   },
 };

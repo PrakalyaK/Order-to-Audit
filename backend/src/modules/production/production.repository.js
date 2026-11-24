@@ -63,6 +63,7 @@ export const productionRepository = {
         fg.sku AS finished_good_sku,
         fg.name AS finished_good_name,
         fg.base_uom_id AS finished_good_uom,
+        fg.image_url AS finished_good_image_url,
         u.username AS supervisor_username,
         u.full_name AS supervisor_name,
         (SELECT COUNT(*)::int FROM production_run_inputs pri WHERE pri.production_run_id = pr.id) AS input_items_count
@@ -117,6 +118,7 @@ export const productionRepository = {
         fg.sku AS finished_good_sku,
         fg.name AS finished_good_name,
         fg.base_uom_id AS finished_good_uom,
+        fg.image_url AS finished_good_image_url,
         u.username AS supervisor_username,
         u.full_name AS supervisor_name
       FROM production_runs pr

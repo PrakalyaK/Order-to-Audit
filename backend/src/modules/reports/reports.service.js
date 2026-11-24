@@ -24,4 +24,32 @@ export const reportsService = {
   async getBatchTraceability(batchNumber) {
     return reportsRepository.getBatchTraceability(batchNumber);
   },
+
+  async getSalesRegister(filters) {
+    return reportsRepository.getSalesRegister(filters);
+  },
+
+  async getPurchaseRegister(filters) {
+    return reportsRepository.getPurchaseRegister(filters);
+  },
+
+  async getStockSummary() {
+    return reportsRepository.getStockSummary();
+  },
+
+  async getStockLedger(filters) {
+    return reportsRepository.getStockLedger(filters);
+  },
+
+  async getYieldAndWastage(filters) {
+    return reportsRepository.getYieldAndWastage(filters);
+  },
+
+  async getCostPerPacket(filters) {
+    return reportsRepository.getCostPerPacket(filters);
+  },
+
+  async getReceivablesAgeing() {
+    return reportsRepository.getReceivablesAgeing();
+  },
 };

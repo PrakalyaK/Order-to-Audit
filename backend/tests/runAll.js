@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const TESTS_DIR = __dirname;
+const PROJECT_ROOT = path.resolve(__dirname, '../../');
 
 const testFiles = fs.readdirSync(TESTS_DIR)
   .filter(f => f.endsWith('.test.js'))
@@ -48,6 +49,13 @@ async function runTest(file) {
 }
 
 async function runAll() {
+  console.log('\n>>> Preparing pristine benchmark test database...');
+  try {
+    execSync('node database/scripts/setup.js --reset', { stdio: 'inherit', cwd: PROJECT_ROOT });
+  } catch (setupErr) {
+    console.error('Failed to prepare test database:', setupErr.message);
+  }
+
   const start = Date.now();
   for (const file of testFiles) {
     await runTest(file);

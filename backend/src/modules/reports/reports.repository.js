@@ -301,4 +301,141 @@ export const reportsRepository = {
       ledger_history: ledgerRes.rows,
     };
   },
+
+  async getSalesRegister(filters = {}) {
+    let sql = 'SELECT * FROM v_invoice_balances WHERE 1=1';
+    const params = [];
+    if (filters.fromDate) {
+      params.push(filters.fromDate);
+      sql += ` AND invoice_date >= $${params.length}`;
+    }
+    if (filters.toDate) {
+      params.push(filters.toDate);
+      sql += ` AND invoice_date <= $${params.length}`;
+    }
+    sql += ' ORDER BY invoice_date DESC, invoice_number DESC;';
+    const res = await query(sql, params);
+    return res.rows;
+  },
+
+  async getPurchaseRegister(filters = {}) {
+    let sql = `
+      SELECT 
+        pb.id, pb.bill_number, pb.bill_date, pb.supplier_id, p.trade_name AS supplier_name,
+        p.gstin AS supplier_gstin, p.state_code AS supplier_state_code,
+        pb.subtotal_amount, 
+        ROUND(pb.cgst_amount + pb.sgst_amount + pb.igst_amount, 2) AS tax_amount,
+        pb.total_amount, pb.status,
+        COALESCE(spa.total_allocated, 0.00) AS total_paid_amount,
+        ROUND(pb.total_amount - COALESCE(spa.total_allocated, 0.00), 2) AS outstanding_balance
+      FROM purchase_bills pb
+      JOIN parties p ON pb.supplier_id = p.id
+      LEFT JOIN (
+        SELECT purchase_bill_id, SUM(allocated_amount) AS total_allocated
+        FROM supplier_payment_allocations
+        WHERE status = 'active'
+        GROUP BY purchase_bill_id
+      ) spa ON pb.id = spa.purchase_bill_id
+      WHERE pb.status <> 'cancelled'
+    `;
+    const params = [];
+    if (filters.fromDate) {
+      params.push(filters.fromDate);
+      sql += ` AND pb.bill_date >= $${params.length}`;
+    }
+    if (filters.toDate) {
+      params.push(filters.toDate);
+      sql += ` AND pb.bill_date <= $${params.length}`;
+    }
+    sql += ' ORDER BY pb.bill_date DESC, pb.bill_number DESC;';
+    const res = await query(sql, params);
+    return res.rows;
+  },
+
+  async getStockSummary() {
+    const res = await query(`
+      SELECT 
+        *,
+        closing_stock_base_qty AS current_base_qty,
+        total_stock_valuation AS current_total_value
+      FROM v_current_stock 
+      ORDER BY item_type, sku;
+    `);
+    return res.rows;
+  },
+
+  async getStockLedger(filters = {}) {
+    let sql = 'SELECT * FROM v_stock_ledger WHERE 1=1';
+    const params = [];
+    if (filters.sku) {
+      params.push(filters.sku);
+      sql += ` AND sku = $${params.length}`;
+    }
+    if (filters.movementType) {
+      params.push(filters.movementType);
+      sql += ` AND movement_type = $${params.length}`;
+    }
+    if (filters.fromDate) {
+      params.push(filters.fromDate);
+      sql += ` AND transaction_timestamp >= $${params.length}::timestamptz`;
+    }
+    if (filters.toDate) {
+      params.push(filters.toDate);
+      sql += ` AND transaction_timestamp <= ($${params.length}::date + INTERVAL '1 day')::timestamptz`;
+    }
+    sql += ' ORDER BY transaction_timestamp DESC, ledger_id DESC LIMIT 200;';
+    const res = await query(sql, params);
+    return res.rows;
+  },
+
+  async getYieldAndWastage(filters = {}) {
+    const res = await query(`
+      SELECT 
+        pr.id, pr.run_number, pr.run_date, pr.status,
+        fg.name AS finished_good_name, fg.sku AS finished_good_sku,
+        pr.planned_yield_qty, pr.actual_good_output_qty, pr.actual_scrap_output_qty,
+        pr.yield_variance_qty, pr.yield_variance_pct, pr.is_yield_flagged,
+        COALESCE(prc.gross_total_batch_cost, 0.00) AS total_batch_cost,
+        COALESCE(prc.cost_per_packet, 0.00) AS cost_per_packet
+      FROM production_runs pr
+      JOIN items fg ON pr.finished_good_item_id = fg.id
+      LEFT JOIN production_run_costing prc ON pr.id = prc.production_run_id
+      ORDER BY pr.run_date DESC, pr.run_number DESC;
+    `);
+    return res.rows;
+  },
+
+  async getCostPerPacket(filters = {}) {
+    const res = await query(`
+      SELECT 
+        pr.run_number, pr.run_date, fg.name AS item_name, fg.sku,
+        prc.total_raw_material_cost,
+        prc.total_packaging_cost,
+        prc.total_direct_overhead_cost,
+        prc.gross_total_batch_cost,
+        prc.good_output_units,
+        prc.cost_per_packet,
+        prc.selling_price_per_packet,
+        prc.unit_gross_margin,
+        prc.gross_margin_pct,
+        prc.calculated_at
+      FROM production_run_costing prc
+      JOIN production_runs pr ON prc.production_run_id = pr.id
+      JOIN items fg ON pr.finished_good_item_id = fg.id
+      ORDER BY pr.run_date DESC;
+    `);
+    return res.rows;
+  },
+
+  async getReceivablesAgeing() {
+    const res = await query(`
+      SELECT 
+        v.*,
+        p.phone, p.email, p.credit_limit
+      FROM v_customer_outstanding v
+      JOIN parties p ON v.customer_id = p.id
+      ORDER BY v.net_invoice_receivables DESC;
+    `);
+    return res.rows;
+  },
 };

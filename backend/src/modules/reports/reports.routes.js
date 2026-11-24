@@ -41,4 +41,13 @@ router.get('/production', authenticate, authorizeRoles(...OPS_ROLES), reportsCon
 router.get('/financial', authenticate, authorizeRoles(...FINANCIAL_ROLES), reportsController.getFinancial);
 router.get('/traceability/:batchNumber', authenticate, authorizeRoles(...OPS_ROLES), reportsController.getTraceability);
 
+// Statutory & Audit Registers
+router.get('/sales-register', authenticate, authorizeRoles(...FINANCIAL_ROLES, ROLES.SALESMAN), reportsController.getSalesRegister);
+router.get('/purchase-register', authenticate, authorizeRoles(...FINANCIAL_ROLES), reportsController.getPurchaseRegister);
+router.get('/stock-summary', authenticate, authorizeRoles(...OPS_ROLES), reportsController.getStockSummary);
+router.get('/stock-ledger', authenticate, authorizeRoles(...OPS_ROLES), reportsController.getStockLedger);
+router.get('/production-yield-wastage', authenticate, authorizeRoles(...OPS_ROLES), reportsController.getYieldAndWastage);
+router.get('/cost-per-packet', authenticate, authorizeRoles(...FINANCIAL_ROLES, ROLES.PRODUCTION_SUPERVISOR), reportsController.getCostPerPacket);
+router.get('/receivables-ageing', authenticate, authorizeRoles(...FINANCIAL_ROLES, ROLES.SALESMAN), reportsController.getReceivablesAgeing);
+
 export default router;

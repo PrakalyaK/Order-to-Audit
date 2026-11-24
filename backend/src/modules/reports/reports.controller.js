@@ -72,3 +72,66 @@ export const getTraceability = async (req, res, next) => {
     next(err);
   }
 };
+
+export const getSalesRegister = async (req, res, next) => {
+  try {
+    const data = await reportsService.getSalesRegister(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getPurchaseRegister = async (req, res, next) => {
+  try {
+    const data = await reportsService.getPurchaseRegister(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getStockSummary = async (req, res, next) => {
+  try {
+    const data = await reportsService.getStockSummary();
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getStockLedger = async (req, res, next) => {
+  try {
+    const data = await reportsService.getStockLedger(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getYieldAndWastage = async (req, res, next) => {
+  try {
+    const data = await reportsService.getYieldAndWastage(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getCostPerPacket = async (req, res, next) => {
+  try {
+    const data = await reportsService.getCostPerPacket(req.query);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getReceivablesAgeing = async (req, res, next) => {
+  try {
+    const data = await reportsService.getReceivablesAgeing();
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
