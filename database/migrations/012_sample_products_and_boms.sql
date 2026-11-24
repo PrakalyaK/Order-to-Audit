@@ -198,7 +198,10 @@ INSERT INTO item_stock_balances (item_id, current_base_qty, current_moving_wac, 
 ('a1000007-0000-0000-0000-000000000007', 30.0000, 31.0000, 930.00),    -- Kara Boondi 200g
 ('a1000008-0000-0000-0000-000000000008', 40.0000, 17.0000, 680.00),    -- Tapioca Chips 100g
 ('a1000009-0000-0000-0000-000000000009', 30.0000, 33.0000, 990.00)     -- Seedai 200g
-ON CONFLICT (item_id) DO NOTHING;
+ON CONFLICT (item_id) DO UPDATE SET
+    current_base_qty = EXCLUDED.current_base_qty,
+    current_moving_wac = EXCLUDED.current_moving_wac,
+    current_total_value = EXCLUDED.current_total_value;
 
 -- ----------------------------------------------------------------------------
 -- 7. SEED INVENTORY LEDGER MOVEMENTS (APPEND-ONLY AUDIT TRAIL)

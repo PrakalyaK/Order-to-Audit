@@ -113,8 +113,10 @@ export const bomsRepository = {
         i.name AS item_name, i.sku AS item_sku, i.item_type, i.base_uom_id AS item_base_uom,
         i.standard_purchase_rate AS material_standard_rate,
         COALESCE(NULLIF(isb.current_moving_wac, 0), i.standard_purchase_rate, 0) AS current_moving_wac,
+        COALESCE(NULLIF(isb.current_moving_wac, 0), i.standard_purchase_rate, 0) AS unit_cost,
         ROUND((bi.standard_qty * COALESCE(NULLIF(isb.current_moving_wac, 0), i.standard_purchase_rate, 0)), 2) AS line_estimated_cost,
         COALESCE(isb.current_base_qty, 0) AS current_available_stock,
+        COALESCE(isb.current_base_qty, 0) AS available_stock_qty,
         u.name AS uom_name, u.dimension AS uom_dimension
       FROM bom_items bi
       JOIN items i ON bi.item_id = i.id
