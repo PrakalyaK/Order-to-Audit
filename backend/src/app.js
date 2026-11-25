@@ -27,6 +27,8 @@ import auditRoutes from './modules/audit/audit.routes.js';
 import reportsRoutes from './modules/reports/reports.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
+import fulfilmentRoutes from './modules/fulfilment/fulfilment.routes.js';
+import notificationsRoutes from './modules/fulfilment/notifications.routes.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
@@ -112,6 +114,8 @@ app.use(`${env.apiPrefix}/purchases`, purchasesRoutes);
 app.use(`${env.apiPrefix}/inventory`, inventoryRoutes);
 app.use(`${env.apiPrefix}/production`, productionRoutes);
 app.use(`${env.apiPrefix}/sales-orders`, salesOrdersRoutes);
+app.use(`${env.apiPrefix}/fulfilment`, fulfilmentRoutes);
+app.use(`${env.apiPrefix}/notifications`, notificationsRoutes);
 app.use(`${env.apiPrefix}/invoices`, invoicesRoutes);
 app.use(`${env.apiPrefix}/dispatches`, dispatchesRoutes);
 app.use(`${env.apiPrefix}/payments`, paymentsRoutes);

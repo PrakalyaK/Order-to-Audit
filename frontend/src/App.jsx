@@ -17,6 +17,7 @@ import { PurchasesPage } from './pages/purchases/PurchasesPage';
 import { InventoryPage } from './pages/inventory/InventoryPage';
 import { ProductionPage } from './pages/production/ProductionPage';
 import { SalesOrdersPage } from './pages/sales/SalesOrdersPage';
+import { FulfilmentPage } from './pages/sales/FulfilmentPage';
 import { InvoicesPage } from './pages/sales/InvoicesPage';
 import { CustomerPaymentsPage } from './pages/payments/CustomerPaymentsPage';
 import { SupplierPaymentsPage } from './pages/payments/SupplierPaymentsPage';
@@ -116,6 +117,15 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="sales/fulfilment"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <FulfilmentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="fulfilment" element={<Navigate to="/sales/fulfilment" replace />} />
             <Route
               path="sales/invoices"
               element={

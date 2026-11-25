@@ -21,6 +21,7 @@ const MIGRATION_FILES = [
   'database/migrations/011_advanced_erp_operations.sql',
   'database/seeds/benchmark_seed.sql',
   'database/migrations/012_sample_products_and_boms.sql',
+  'database/migrations/013_order_fulfilment_and_production_requirements.sql',
 ];
 
 async function setupDatabase(dropSchema = false) {

@@ -18,6 +18,7 @@ import {
   BarChart3,
   ShieldCheck,
   UserCheck,
+  Truck,
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -52,6 +53,7 @@ export const Sidebar = () => {
       title: 'Sales & Receipts',
       items: [
         { name: 'Sales Orders', path: '/sales/orders', icon: ShoppingCart, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: 'Order Fulfilment', path: '/sales/fulfilment', icon: Truck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
         { name: 'Tax Invoices', path: '/sales/invoices', icon: Receipt, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
         { name: 'Customer Receipts', path: '/payments/customers', icon: CreditCard, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
         { name: 'Supplier Payments', path: '/payments/suppliers', icon: Building2, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
