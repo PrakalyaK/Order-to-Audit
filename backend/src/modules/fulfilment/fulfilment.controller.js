@@ -95,3 +95,4 @@ export const markAllNotificationsRead = asyncHandler(async (req, res) => {
     data: result,
   });
 });
+
