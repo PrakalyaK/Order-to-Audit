@@ -4,10 +4,24 @@ import { Card, Button, Badge, LoadingSpinner, Modal, EmptyState } from '../../co
 import { ShieldCheck, Search, Filter, Eye, Lock, ArrowRight, RefreshCw } from 'lucide-react';
 
 export const AuditLogsPage = () => {
-  const [logs, setLogs] = useState([]);
-  const [entities, setEntities] = useState([]);
-  const [actions, setActions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState(() => {
+    const cached = api.getCached?.('/audit/logs', { page: 1, limit: 50 });
+    const raw = cached?.data?.logs || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [entities, setEntities] = useState(() => {
+    const cached = api.getCached?.('/audit/filters');
+    return cached?.data?.entities || [];
+  });
+  const [actions, setActions] = useState(() => {
+    const cached = api.getCached?.('/audit/filters');
+    return cached?.data?.actions || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/audit/logs', { page: 1, limit: 50 });
+    const raw = cached?.data?.logs || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [meta, setMeta] = useState({ total: 0, page: 1, limit: 50, totalPages: 1 });
 
@@ -35,7 +49,7 @@ export const AuditLogsPage = () => {
 
   const fetchLogs = async () => {
     try {
-      setLoading(true);
+      if (logs.length === 0) setLoading(true);
       setError('');
       const params = { page, limit: 50 };
       if (entityName) params.entity_name = entityName;

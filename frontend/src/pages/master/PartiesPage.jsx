@@ -8,8 +8,16 @@ export const PartiesPage = () => {
   const { hasRole } = useAuth();
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [parties, setParties] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [parties, setParties] = useState(() => {
+    const cached = api.getCached?.('/parties');
+    const raw = cached?.data?.parties || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/parties');
+    const raw = cached?.data?.parties || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [partyType, setPartyType] = useState('');
   const [search, setSearch] = useState('');
@@ -35,7 +43,7 @@ export const PartiesPage = () => {
 
   const fetchParties = async () => {
     try {
-      setLoading(true);
+      if (parties.length === 0) setLoading(true);
       setError('');
       const params = {};
       if (partyType) params.party_type = partyType;

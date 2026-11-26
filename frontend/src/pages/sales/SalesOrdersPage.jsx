@@ -9,10 +9,26 @@ export const SalesOrdersPage = () => {
   const canCreate = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN);
   const canApprove = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [orders, setOrders] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState(() => {
+    const cached = api.getCached?.('/sales-orders');
+    const raw = cached?.data?.salesOrders ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [customers, setCustomers] = useState(() => {
+    const cached = api.getCached?.('/parties', { party_type: 'customer' });
+    const raw = cached?.data?.parties ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [items, setItems] = useState(() => {
+    const cached = api.getCached?.('/items', { item_type: 'finished_good' });
+    const raw = cached?.data?.items ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/sales-orders');
+    const raw = cached?.data?.salesOrders ?? cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'pending' | 'approved'
@@ -35,7 +51,7 @@ export const SalesOrdersPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (orders.length === 0) setLoading(true);
       setError('');
       const [ordersRes, partiesRes, itemsRes] = await Promise.allSettled([
         api.get('/sales-orders'),

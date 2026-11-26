@@ -34,10 +34,26 @@ export const BomsPage = () => {
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
   // Core Data
-  const [boms, setBoms] = useState([]);
-  const [items, setItems] = useState([]);
-  const [uoms, setUoms] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [boms, setBoms] = useState(() => {
+    const cached = api.getCached?.('/boms');
+    const raw = cached?.data?.boms ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [items, setItems] = useState(() => {
+    const cached = api.getCached?.('/items');
+    const raw = cached?.data?.items ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [uoms, setUoms] = useState(() => {
+    const cached = api.getCached?.('/units');
+    const raw = cached?.data?.units ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/boms');
+    const raw = cached?.data?.boms ?? cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
 
   // UI View Controls
@@ -85,7 +101,7 @@ export const BomsPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (boms.length === 0) setLoading(true);
       setError('');
       const [bomsRes, itemsRes, uomsRes] = await Promise.allSettled([
         api.get('/boms'),

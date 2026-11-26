@@ -32,19 +32,25 @@ export const FulfilmentPage = () => {
   const canManageProduction = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR);
 
   const [activeTab, setActiveTab] = useState('ready'); // 'ready' | 'shortage' | 'all'
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(() => {
+    const cached = api.getCached?.('/fulfilment');
+    return cached?.data?.summary || {
+      total_approved_orders: 0,
+      ready_to_dispatch_count: 0,
+      stock_shortage_count: 0,
+      pending_production_requirements: 0,
+    };
+  });
+  const [orders, setOrders] = useState(() => {
+    const cached = api.getCached?.('/fulfilment');
+    return cached?.data?.orders || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/fulfilment');
+    return !cached?.data?.orders;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-
-  // Dashboard stats
-  const [summary, setSummary] = useState({
-    total_approved_orders: 0,
-    ready_to_dispatch_count: 0,
-    stock_shortage_count: 0,
-    pending_production_requirements: 0,
-  });
-
-  const [orders, setOrders] = useState([]);
 
   // Modals state
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -69,7 +75,7 @@ export const FulfilmentPage = () => {
 
   const fetchFulfilmentData = async () => {
     try {
-      setLoading(true);
+      if (orders.length === 0) setLoading(true);
       setError('');
 
       let tabParam = undefined;

@@ -8,8 +8,16 @@ export const InvoicesPage = () => {
   const { hasRole } = useAuth();
   const canDispatch = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [invoices, setInvoices] = useState(() => {
+    const cached = api.getCached?.('/invoices');
+    const raw = cached?.data?.invoices ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/invoices');
+    const raw = cached?.data?.invoices ?? cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -17,7 +25,7 @@ export const InvoicesPage = () => {
 
   const fetchInvoices = async () => {
     try {
-      setLoading(true);
+      if (invoices.length === 0) setLoading(true);
       setError('');
       const res = await api.get('/invoices');
       if (res.success && res.data) {

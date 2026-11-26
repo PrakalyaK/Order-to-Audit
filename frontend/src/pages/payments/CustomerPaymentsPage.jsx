@@ -9,10 +9,26 @@ export const CustomerPaymentsPage = () => {
   const canRecord = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN);
   const canReverse = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [payments, setPayments] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState(() => {
+    const cached = api.getCached?.('/payments');
+    const raw = cached?.data?.payments || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [customers, setCustomers] = useState(() => {
+    const cached = api.getCached?.('/parties', { party_type: 'customer' });
+    const raw = cached?.data?.parties || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [invoices, setInvoices] = useState(() => {
+    const cached = api.getCached?.('/invoices');
+    const raw = cached?.data?.invoices || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/payments');
+    const raw = cached?.data?.payments || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
@@ -39,7 +55,7 @@ export const CustomerPaymentsPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (payments.length === 0) setLoading(true);
       setError('');
       const canViewInvoices = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR);
       const promises = [

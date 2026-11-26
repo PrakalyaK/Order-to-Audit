@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, DEMO_PERSONAS } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -12,6 +12,10 @@ export const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    document.title = 'Sign In — Order-to-Audit Food Manufacturing ERP';
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

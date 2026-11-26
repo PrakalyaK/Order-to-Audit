@@ -4,8 +4,9 @@ import { runAutoMigrations } from '../backend/src/scripts/autoMigrate.js';
 let migrationRan = false;
 
 export default async function handler(req, res) {
-  // Automatically ensure database schema is active on first serverless invocation
-  if (!migrationRan) {
+  // Only execute schema auto-migrations if explicitly flagged via RUN_AUTO_MIGRATE=true
+  // This keeps serverless cold-start latency minimal (<100ms) for deployed production traffic
+  if (!migrationRan && process.env.RUN_AUTO_MIGRATE === 'true') {
     try {
       await runAutoMigrations();
       migrationRan = true;

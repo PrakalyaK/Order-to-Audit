@@ -8,9 +8,21 @@ export const ItemsPage = () => {
   const { hasRole } = useAuth();
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [items, setItems] = useState([]);
-  const [uoms, setUoms] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState(() => {
+    const cached = api.getCached?.('/items');
+    const raw = cached?.data?.items ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [uoms, setUoms] = useState(() => {
+    const cached = api.getCached?.('/units');
+    const raw = cached?.data?.units ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/items');
+    const raw = cached?.data?.items ?? cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [itemType, setItemType] = useState('');
@@ -33,7 +45,7 @@ export const ItemsPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (items.length === 0) setLoading(true);
       setError('');
       const params = {};
       if (search) params.search = search;

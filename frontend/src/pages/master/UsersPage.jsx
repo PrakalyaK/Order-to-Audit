@@ -4,13 +4,21 @@ import { Card, Button, Badge, LoadingSpinner, EmptyState } from '../../component
 import { UserCheck, Shield, Phone, Calendar } from 'lucide-react';
 
 export const UsersPage = () => {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState(() => {
+    const cached = api.getCached?.('/users');
+    const raw = cached?.data?.users || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/users');
+    const raw = cached?.data?.users || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
 
   const fetchUsers = async () => {
     try {
-      setLoading(true);
+      if (users.length === 0) setLoading(true);
       setError('');
       const res = await api.get('/users');
       if (res.success && res.data) {

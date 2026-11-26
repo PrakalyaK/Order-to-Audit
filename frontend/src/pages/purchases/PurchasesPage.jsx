@@ -8,11 +8,31 @@ export const PurchasesPage = () => {
   const { hasRole } = useAuth();
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [bills, setBills] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [items, setItems] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [bills, setBills] = useState(() => {
+    const cached = api.getCached?.('/purchases');
+    const raw = cached?.data?.bills || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [suppliers, setSuppliers] = useState(() => {
+    const cached = api.getCached?.('/parties', { party_type: 'supplier' });
+    const raw = cached?.data?.parties || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [items, setItems] = useState(() => {
+    const cached = api.getCached?.('/items');
+    const raw = cached?.data?.items || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [warehouses, setWarehouses] = useState(() => {
+    const cached = api.getCached?.('/warehouses');
+    const raw = cached?.data?.warehouses || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/purchases');
+    const raw = cached?.data?.bills || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
@@ -34,7 +54,7 @@ export const PurchasesPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (bills.length === 0) setLoading(true);
       setError('');
       const [billsRes, partiesRes, itemsRes, whRes] = await Promise.allSettled([
         api.get('/purchases'),

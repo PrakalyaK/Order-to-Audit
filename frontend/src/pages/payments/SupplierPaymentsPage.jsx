@@ -9,10 +9,26 @@ export const SupplierPaymentsPage = () => {
   const canRecord = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
   const canReverse = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [payments, setPayments] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [bills, setBills] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState(() => {
+    const cached = api.getCached?.('/supplier-payments');
+    const raw = cached?.data?.payments || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [suppliers, setSuppliers] = useState(() => {
+    const cached = api.getCached?.('/parties', { party_type: 'supplier' });
+    const raw = cached?.data?.parties || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [bills, setBills] = useState(() => {
+    const cached = api.getCached?.('/purchases');
+    const raw = cached?.data?.bills || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/supplier-payments');
+    const raw = cached?.data?.payments || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
@@ -38,7 +54,7 @@ export const SupplierPaymentsPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (payments.length === 0) setLoading(true);
       setError('');
       const results = await Promise.allSettled([
         api.get('/supplier-payments'),

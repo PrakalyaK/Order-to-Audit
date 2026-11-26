@@ -9,11 +9,31 @@ export const InventoryPage = () => {
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR);
 
   const [activeTab, setActiveTab] = useState('stock'); // 'stock' | 'batches' | 'adjustments'
-  const [stock, setStock] = useState([]);
-  const [batches, setBatches] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [stock, setStock] = useState(() => {
+    const cached = api.getCached?.('/inventory/stock');
+    const raw = cached?.data?.stock || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [batches, setBatches] = useState(() => {
+    const cached = api.getCached?.('/batches');
+    const raw = cached?.data?.batches || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [warehouses, setWarehouses] = useState(() => {
+    const cached = api.getCached?.('/warehouses');
+    const raw = cached?.data?.warehouses || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [items, setItems] = useState(() => {
+    const cached = api.getCached?.('/items');
+    const raw = cached?.data?.items || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/inventory/stock');
+    const raw = cached?.data?.stock || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
 
   // Transfer modal
@@ -38,7 +58,7 @@ export const InventoryPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (stock.length === 0) setLoading(true);
       setError('');
       const results = await Promise.allSettled([
         api.get('/inventory/stock'),

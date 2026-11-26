@@ -40,10 +40,26 @@ export const ProductionPage = () => {
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR);
 
   // Core Data
-  const [runs, setRuns] = useState([]);
-  const [boms, setBoms] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [runs, setRuns] = useState(() => {
+    const cached = api.getCached?.('/production');
+    const raw = cached?.data?.data ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [boms, setBoms] = useState(() => {
+    const cached = api.getCached?.('/boms');
+    const raw = cached?.data?.boms ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [warehouses, setWarehouses] = useState(() => {
+    const cached = api.getCached?.('/warehouses');
+    const raw = cached?.data?.warehouses ?? cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/production');
+    const raw = cached?.data?.data ?? cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
 
   // Filtering & Search
@@ -102,7 +118,7 @@ export const ProductionPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (runs.length === 0) setLoading(true);
       setError('');
       const [runsRes, bomsRes, whRes] = await Promise.allSettled([
         api.get('/production'),

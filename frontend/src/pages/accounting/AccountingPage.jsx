@@ -9,11 +9,23 @@ export const AccountingPage = () => {
   const canPostJournals = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
   const [activeTab, setActiveTab] = useState('tb'); // 'tb' | 'accounts' | 'journals' | 'pl'
-  const [trialBalance, setTrialBalance] = useState([]);
-  const [accounts, setAccounts] = useState([]);
+  const [trialBalance, setTrialBalance] = useState(() => {
+    const cached = api.getCached?.('/accounting/reports/trial-balance');
+    const raw = cached?.data?.accounts || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [accounts, setAccounts] = useState(() => {
+    const cached = api.getCached?.('/accounting/accounts');
+    const raw = cached?.data?.accounts || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
   const [journalEntries, setJournalEntries] = useState([]);
   const [plData, setPlData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/accounting/reports/trial-balance');
+    const raw = cached?.data?.accounts || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
 
   // Manual Journal Entry Modal
@@ -30,7 +42,7 @@ export const AccountingPage = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (trialBalance.length === 0) setLoading(true);
       setError('');
       const results = await Promise.allSettled([
         api.get('/accounting/reports/trial-balance'),

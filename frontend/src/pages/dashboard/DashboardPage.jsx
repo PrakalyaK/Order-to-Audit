@@ -40,20 +40,23 @@ import {
 export const DashboardPage = () => {
   const { user, hasRole } = useAuth();
   const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => {
+    const cached = api.getCached?.('/reports/dashboard');
+    return cached?.data || cached || null;
+  });
+  const [loading, setLoading] = useState(() => !api.getCached?.('/reports/dashboard'));
   const [error, setError] = useState('');
 
   const fetchDashboard = async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
       setError('');
       const res = await api.get('/reports/dashboard');
       if (res.success && res.data) {
         setData(res.data);
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch dashboard metrics');
+      if (!data) setError(err.message || 'Failed to fetch dashboard metrics');
     } finally {
       setLoading(false);
     }

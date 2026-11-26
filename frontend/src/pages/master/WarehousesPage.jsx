@@ -8,8 +8,16 @@ export const WarehousesPage = () => {
   const { hasRole } = useAuth();
   const canManage = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
 
-  const [warehouses, setWarehouses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [warehouses, setWarehouses] = useState(() => {
+    const cached = api.getCached?.('/warehouses');
+    const raw = cached?.data?.warehouses || cached?.data;
+    return Array.isArray(raw) ? raw : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = api.getCached?.('/warehouses');
+    const raw = cached?.data?.warehouses || cached?.data;
+    return !Array.isArray(raw) || raw.length === 0;
+  });
   const [error, setError] = useState('');
   const [selectedStock, setSelectedStock] = useState(null);
   const [stockModalOpen, setStockModalOpen] = useState(false);
@@ -29,7 +37,7 @@ export const WarehousesPage = () => {
 
   const fetchWarehouses = async () => {
     try {
-      setLoading(true);
+      if (warehouses.length === 0) setLoading(true);
       setError('');
       const res = await api.get('/warehouses');
       if (res.success && res.data) {
