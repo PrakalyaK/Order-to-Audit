@@ -20,10 +20,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useAuth, ROLES } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 
 export const FulfilmentPage = () => {
   const { hasRole, user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const canDispatch = hasRole(ROLES.OWNER, ROLES.FACTORY_ADMIN);
@@ -289,15 +291,15 @@ export const FulfilmentPage = () => {
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Truck className="w-6 h-6 text-blue-600" />
-            Order Fulfilment & Stock Availability
+            {t('fulfilmentTitle')}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Real-time validation of Admin-approved Sales Orders against finished goods inventory, automated production requirements & dispatch workflow.
+            {t('fulfilmentSubtitle')}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" icon={RefreshCw} onClick={fetchFulfilmentData} loading={loading}>
-            Refresh Stock
+            Refresh
           </Button>
           {canManageProduction && (
             <Button variant="secondary" size="sm" icon={Factory} onClick={() => navigate('/production')}>
@@ -310,28 +312,28 @@ export const FulfilmentPage = () => {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Orders in Fulfilment"
+          title={t('statTotalApproved')}
           value={summary.total_approved_orders || 0}
           icon={ShoppingCart}
           color="blue"
           subtitle="Admin approved or in progress"
         />
         <StatCard
-          title="Ready to Dispatch"
+          title={t('statReadyToDispatch')}
           value={summary.ready_to_dispatch_count || 0}
           icon={CheckCircle2}
           color="green"
           subtitle="Sufficient stock available"
         />
         <StatCard
-          title="Stock Shortages"
+          title={t('statStockShortage')}
           value={summary.stock_shortage_count || 0}
           icon={AlertTriangle}
           color="rose"
           subtitle="Require manufacturing output"
         />
         <StatCard
-          title="Production Requirements"
+          title={t('statPendingProduction')}
           value={summary.pending_production_requirements || 0}
           icon={Layers}
           color="amber"
@@ -353,7 +355,7 @@ export const FulfilmentPage = () => {
               }`}
             >
               <CheckCircle2 className="w-4 h-4" />
-              Ready to Dispatch ({summary.ready_to_dispatch_count || 0})
+              {t('tabReadyToDispatch')} ({summary.ready_to_dispatch_count || 0})
             </button>
 
             <button
@@ -365,7 +367,7 @@ export const FulfilmentPage = () => {
               }`}
             >
               <AlertTriangle className="w-4 h-4" />
-              Stock Shortage ({summary.stock_shortage_count || 0})
+              {t('tabStockShortages')} ({summary.stock_shortage_count || 0})
             </button>
 
             <button
@@ -376,7 +378,7 @@ export const FulfilmentPage = () => {
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              All Approved ({summary.total_approved_orders || 0})
+              {t('tabAllApproved')} ({summary.total_approved_orders || 0})
             </button>
           </div>
 
@@ -385,14 +387,14 @@ export const FulfilmentPage = () => {
               <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search Order # or Customer..."
+                placeholder={t('search')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <Button type="submit" variant="secondary" size="sm">
-              Filter
+              {t('filter')}
             </Button>
           </form>
         </div>
@@ -417,16 +419,16 @@ export const FulfilmentPage = () => {
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/75 text-slate-600 font-semibold text-xs uppercase tracking-wider">
-                  <th className="py-3 px-4">Order #</th>
-                  <th className="py-3 px-4">Customer</th>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4 text-right">Ordered Qty</th>
-                  <th className="py-3 px-4 text-right">Dispatched</th>
-                  <th className="py-3 px-4 text-right">Remaining</th>
-                  <th className="py-3 px-4 text-right">Stock Available</th>
-                  <th className="py-3 px-4 text-right">Shortage</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Actions</th>
+                  <th className="py-3 px-4">{t('orderNumber')}</th>
+                  <th className="py-3 px-4">{t('customer')}</th>
+                  <th className="py-3 px-4">{t('date')}</th>
+                  <th className="py-3 px-4 text-right">{t('orderedQty')}</th>
+                  <th className="py-3 px-4 text-right">{t('dispatchedQty')}</th>
+                  <th className="py-3 px-4 text-right">{t('remainingQty')}</th>
+                  <th className="py-3 px-4 text-right">{t('stockAvailable')}</th>
+                  <th className="py-3 px-4 text-right">{t('shortageQty')}</th>
+                  <th className="py-3 px-4 text-center">{t('status')}</th>
+                  <th className="py-3 px-4 text-center">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -481,7 +483,7 @@ export const FulfilmentPage = () => {
                             icon={Eye}
                             onClick={() => handleViewDetails(order.sales_order_id)}
                           >
-                            Details
+                            {t('btnDetails')}
                           </Button>
 
                           {isReady && canDispatch && (
@@ -492,7 +494,7 @@ export const FulfilmentPage = () => {
                               onClick={() => handleOpenDispatch(order.sales_order_id)}
                               className="bg-emerald-600 hover:bg-emerald-700 text-white"
                             >
-                              Dispatch
+                              {t('btnDispatch')}
                             </Button>
                           )}
 
@@ -504,7 +506,7 @@ export const FulfilmentPage = () => {
                               onClick={() => handleOpenProductionRequirement(order.active_production_requirement_id)}
                               className="border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100"
                             >
-                              Production Req
+                              {t('btnProductionReq')}
                             </Button>
                           )}
                         </div>

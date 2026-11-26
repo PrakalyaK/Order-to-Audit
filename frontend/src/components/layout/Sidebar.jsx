@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth, ROLES } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   LayoutDashboard,
   Package,
@@ -23,48 +24,49 @@ import {
 
 export const Sidebar = () => {
   const { hasRole, user } = useAuth();
+  const { t } = useLanguage();
 
   const navGroups = [
     {
-      title: 'Core Operations',
+      title: t('navCoreOperations'),
       items: [
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: t('navDashboard'), path: '/dashboard', icon: LayoutDashboard, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
       ],
     },
     {
-      title: 'Master Data',
+      title: t('navMasterData'),
       items: [
-        { name: 'Items & Products', path: '/master/items', icon: Package, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Bill of Materials', path: '/master/boms', icon: FileSpreadsheet, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
-        { name: 'Parties (Cust/Supp)', path: '/master/parties', icon: Users, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Warehouses', path: '/master/warehouses', icon: Warehouse, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
-        { name: 'User Management', path: '/master/users', icon: UserCheck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
+        { name: t('navItems'), path: '/master/items', icon: Package, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: t('navBoms'), path: '/master/boms', icon: FileSpreadsheet, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: t('navParties'), path: '/master/parties', icon: Users, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: t('navWarehouses'), path: '/master/warehouses', icon: Warehouse, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: t('navUsers'), path: '/master/users', icon: UserCheck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
       ],
     },
     {
-      title: 'Supply & Production',
+      title: t('navSupplyProduction'),
       items: [
-        { name: 'Purchase Bills', path: '/purchases', icon: ShoppingBag, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
-        { name: 'Inventory & Batches', path: '/inventory', icon: Boxes, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
-        { name: 'Production & Runs', path: '/production', icon: Factory, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: t('navPurchases'), path: '/purchases', icon: ShoppingBag, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
+        { name: t('navInventory'), path: '/inventory', icon: Boxes, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: t('navProduction'), path: '/production', icon: Factory, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
       ],
     },
     {
-      title: 'Sales & Receipts',
+      title: t('navSalesReceipts'),
       items: [
-        { name: 'Sales Orders', path: '/sales/orders', icon: ShoppingCart, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Order Fulfilment', path: '/sales/fulfilment', icon: Truck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
-        { name: 'Tax Invoices', path: '/sales/invoices', icon: Receipt, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
-        { name: 'Customer Receipts', path: '/payments/customers', icon: CreditCard, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Supplier Payments', path: '/payments/suppliers', icon: Building2, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
+        { name: t('navSalesOrders'), path: '/sales/orders', icon: ShoppingCart, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: t('navFulfilment'), path: '/sales/fulfilment', icon: Truck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: t('navInvoices'), path: '/sales/invoices', icon: Receipt, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
+        { name: t('navCustomerReceipts'), path: '/payments/customers', icon: CreditCard, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: t('navSupplierPayments'), path: '/payments/suppliers', icon: Building2, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
       ],
     },
     {
-      title: 'Finance & Compliance',
+      title: t('navFinanceCompliance'),
       items: [
-        { name: 'Accounting & GL', path: '/accounting', icon: BookOpen, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
-        { name: 'Reports & Analytics', path: '/reports', icon: BarChart3, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
-        { name: 'Audit Trail Logs', path: '/audit', icon: ShieldCheck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
+        { name: t('navAccounting'), path: '/accounting', icon: BookOpen, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
+        { name: t('navReports'), path: '/reports', icon: BarChart3, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.SALESMAN, ROLES.AUDITOR] },
+        { name: t('navAudit'), path: '/audit', icon: ShieldCheck, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
       ],
     },
   ];
@@ -77,8 +79,8 @@ export const Sidebar = () => {
           OA
         </div>
         <div>
-          <h1 className="font-bold text-white text-sm tracking-wide">ORDER-TO-AUDIT</h1>
-          <p className="text-[10px] text-blue-400 font-medium uppercase tracking-wider">Food Manufacturing ERP</p>
+          <h1 className="font-bold text-white text-sm tracking-wide">{t('appName')}</h1>
+          <p className="text-[10px] text-blue-400 font-medium uppercase tracking-wider">{t('appSubtitle')}</p>
         </div>
       </div>
 

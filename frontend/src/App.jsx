@@ -186,7 +186,8 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
+    </LanguageProvider>
+  </AuthProvider>
   );
 }
 
