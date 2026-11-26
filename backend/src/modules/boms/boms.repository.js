@@ -167,6 +167,13 @@ export const bomsRepository = {
   },
 
   /**
+   * Alias for finding active BOM by finished good ID
+   */
+  async findActiveByFinishedGoodItemId(finishedGoodItemId) {
+    return this.findActiveByProductId(finishedGoodItemId);
+  },
+
+  /**
    * Check if BOM has been used in production runs
    */
   async isUsedInProduction(bomId) {

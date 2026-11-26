@@ -255,9 +255,9 @@ export const fulfilmentRepository = {
         b.bom_code,
         COUNT(*) OVER()::int AS total_count
       FROM production_requirements pr
-      JOIN sales_orders so ON pr.sales_order_id = so.id
-      JOIN parties p ON so.customer_id = p.id
-      JOIN items it ON pr.product_id = it.id
+      LEFT JOIN sales_orders so ON pr.sales_order_id = so.id
+      LEFT JOIN parties p ON so.customer_id = p.id
+      LEFT JOIN items it ON pr.product_id = it.id
       LEFT JOIN boms b ON b.finished_good_item_id = it.id AND b.is_active = TRUE
       ${whereClause}
       ORDER BY pr.created_at DESC
@@ -294,9 +294,9 @@ export const fulfilmentRepository = {
         it.sku AS product_sku,
         it.base_uom_id AS uom_id
       FROM production_requirements pr
-      JOIN sales_orders so ON pr.sales_order_id = so.id
-      JOIN parties p ON so.customer_id = p.id
-      JOIN items it ON pr.product_id = it.id
+      LEFT JOIN sales_orders so ON pr.sales_order_id = so.id
+      LEFT JOIN parties p ON so.customer_id = p.id
+      LEFT JOIN items it ON pr.product_id = it.id
       WHERE pr.id = $1;
     `;
     const res = await runner.query(sql, [id]);

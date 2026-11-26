@@ -782,19 +782,25 @@ export const FulfilmentPage = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {(prodReqDetails.materials || []).map((m) => {
-                        const isShort = m.shortage_quantity > 0;
+                        const matId = m.material_item_id || m.item_id;
+                        const sku = m.sku || m.item_sku;
+                        const stdQty = m.standard_quantity ?? m.standard_qty_per_batch ?? 0;
+                        const reqQty = m.total_required_quantity ?? m.total_required_qty ?? 0;
+                        const availStock = m.available_stock ?? m.available_stock_qty ?? 0;
+                        const shortQty = m.shortage_quantity ?? m.shortage_qty ?? 0;
+                        const isShort = shortQty > 0;
                         return (
-                          <tr key={m.material_item_id} className={isShort ? 'bg-rose-50/40' : ''}>
+                          <tr key={matId} className={isShort ? 'bg-rose-50/40' : ''}>
                             <td className="py-2.5 px-3 font-medium text-slate-800">
                               {m.item_name}
-                              <span className="block text-[10px] text-slate-400">{m.sku}</span>
+                              <span className="block text-[10px] text-slate-400">{sku}</span>
                             </td>
-                            <td className="py-2.5 px-3 text-right text-slate-600">{m.standard_quantity} {m.uom_id}</td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-slate-900">{m.total_required_quantity}</td>
-                            <td className="py-2.5 px-3 text-right font-medium text-emerald-600">{m.available_stock}</td>
+                            <td className="py-2.5 px-3 text-right text-slate-600">{stdQty} {m.uom_id}</td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-slate-900">{reqQty}</td>
+                            <td className="py-2.5 px-3 text-right font-medium text-emerald-600">{availStock}</td>
                             <td className="py-2.5 px-3 text-right">
                               {isShort ? (
-                                <span className="font-bold text-rose-600">{m.shortage_quantity}</span>
+                                <span className="font-bold text-rose-600">{shortQty}</span>
                               ) : (
                                 <span className="text-slate-400">0</span>
                               )}
@@ -811,8 +817,8 @@ export const FulfilmentPage = () => {
                                 <Button
                                   variant="secondary"
                                   size="sm"
-                                  loading={procuringMaterialId === m.material_item_id}
-                                  onClick={() => handleRaiseProcurement(m)}
+                                  loading={procuringMaterialId === matId}
+                                  onClick={() => handleRaiseProcurement({ ...m, material_item_id: matId, shortage_quantity: shortQty })}
                                   className="text-xs bg-rose-100 hover:bg-rose-200 text-rose-800 border-none"
                                 >
                                   Raise PR
