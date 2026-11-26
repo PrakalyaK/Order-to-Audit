@@ -40,4 +40,45 @@ api.interceptors.response.use(
   }
 );
 
+// In-memory response cache to make tab switches instantaneous (0ms)
+const cache = new Map();
+const CACHE_TTL_MS = 60000; // 60 seconds
+
+export const clearApiCache = () => {
+  cache.clear();
+};
+
+api.clearCache = clearApiCache;
+
+// Transparent caching wrapper for GET requests
+const originalGet = api.get.bind(api);
+api.get = async function (url, config = {}) {
+  // If caller requests a bypass or passes a cache-busting timestamp
+  if (config.bypassCache || config.params?._t || config.headers?.['Cache-Control'] === 'no-cache') {
+    const res = await originalGet(url, config);
+    return res;
+  }
+
+  const cacheKey = `${url}?${JSON.stringify(config.params || {})}`;
+  const cached = cache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const result = await originalGet(url, config);
+  cache.set(cacheKey, { timestamp: now, data: result });
+  return result;
+};
+
+// Automatically invalidate cache whenever a state-changing mutation occurs
+['post', 'put', 'patch', 'delete'].forEach((method) => {
+  const originalMethod = api[method].bind(api);
+  api[method] = async function (...args) {
+    clearApiCache();
+    return originalMethod(...args);
+  };
+});
+
 export default api;
