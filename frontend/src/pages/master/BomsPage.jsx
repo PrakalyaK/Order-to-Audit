@@ -105,7 +105,7 @@ export const BomsPage = () => {
       setError('');
       const [bomsRes, itemsRes, uomsRes] = await Promise.allSettled([
         api.get('/boms'),
-        api.get('/items'),
+        api.get('/items', { params: { limit: 200 } }),
         api.get('/units'),
       ]);
 

@@ -4,7 +4,7 @@ export const itemsRepository = {
   /**
    * Find items with search, filters, and pagination
    */
-  async findAll({ page = 1, limit = 20, search, item_type, is_active, base_uom_id }) {
+  async findAll({ page = 1, limit = 100, search, item_type, is_active, base_uom_id }) {
     const offset = (page - 1) * limit;
     const conditions = [];
     const params = [];

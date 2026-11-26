@@ -47,7 +47,7 @@ export const ItemsPage = () => {
     try {
       if (items.length === 0) setLoading(true);
       setError('');
-      const params = {};
+      const params = { limit: 100 };
       if (search) params.search = search;
       if (itemType) params.item_type = itemType;
 

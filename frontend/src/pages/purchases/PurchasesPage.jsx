@@ -60,7 +60,7 @@ export const PurchasesPage = () => {
       const [billsRes, partiesRes, itemsRes, whRes] = await Promise.allSettled([
         api.get('/purchases'),
         api.get('/parties?party_type=supplier'),
-        api.get('/items'),
+        api.get('/items', { params: { limit: 200 } }),
         api.get('/warehouses'),
       ]);
 
@@ -480,14 +480,31 @@ export const PurchasesPage = () => {
                       required
                       value={row.item_id}
                       onChange={(e) => handleItemChange(idx, 'item_id', e.target.value)}
-                      className="w-full border border-slate-300 rounded p-1.5 text-xs"
+                      className="w-full border border-slate-300 rounded p-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     >
-                      <option value="">Select Item...</option>
-                      {items.map((it) => (
-                        <option key={it.id} value={it.id}>
-                          {it.name} ({it.sku})
-                        </option>
-                      ))}
+                      <option value="">Select Raw Material or Packaging...</option>
+                      {items.some((it) => it.item_type === 'packaging') && (
+                        <optgroup label="📦 Packaging Materials (Cartons, Pouches, Boxes)">
+                          {items
+                            .filter((it) => it.item_type === 'packaging')
+                            .map((it) => (
+                              <option key={it.id} value={it.id}>
+                                {it.name} ({it.sku}) — Stock: {parseFloat(it.current_stock_qty || 0)} {it.base_uom_name || it.base_uom_id}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {items.some((it) => it.item_type === 'raw_material' || it.item_type === 'work_in_progress') && (
+                        <optgroup label="🌾 Raw Materials & Ingredients (Flours, Spices, Oils)">
+                          {items
+                            .filter((it) => it.item_type === 'raw_material' || it.item_type === 'work_in_progress')
+                            .map((it) => (
+                              <option key={it.id} value={it.id}>
+                                {it.name} ({it.sku}) — Stock: {parseFloat(it.current_stock_qty || 0)} {it.base_uom_name || it.base_uom_id}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
                   <div className="col-span-2">

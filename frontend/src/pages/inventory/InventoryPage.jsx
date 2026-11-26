@@ -83,7 +83,7 @@ export const InventoryPage = () => {
         api.get('/inventory/stock'),
         api.get('/batches'),
         api.get('/warehouses'),
-        api.get('/items'),
+        api.get('/items', { params: { limit: 200 } }),
       ]);
 
       const [stockRes, batchRes, whRes, itemsRes] = results.map((r) =>
