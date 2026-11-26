@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, ROLES } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { NotFound } from './components/layout/NotFound';
@@ -28,7 +29,8 @@ import { AuditLogsPage } from './pages/audit/AuditLogsPage';
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <LanguageProvider>
+        <BrowserRouter>
         <Routes>
           {/* Public login */}
           <Route path="/login" element={<LoginPage />} />
