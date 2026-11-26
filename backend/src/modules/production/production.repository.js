@@ -140,6 +140,7 @@ export const productionRepository = {
         pri.item_id,
         pri.planned_qty,
         pri.actual_issued_qty,
+        COALESCE(pri.actual_consumed_qty, pri.good_production_qty + pri.damaged_or_scrap_qty, pri.actual_issued_qty) AS actual_consumed_qty,
         pri.good_production_qty,
         pri.damaged_or_scrap_qty,
         pri.returned_to_store_qty,
@@ -283,6 +284,7 @@ export const productionRepository = {
             item_id,
             planned_qty,
             actual_issued_qty,
+            actual_consumed_qty,
             good_production_qty,
             damaged_or_scrap_qty,
             returned_to_store_qty,
@@ -293,14 +295,15 @@ export const productionRepository = {
             consumption_variance_qty,
             consumption_variance_pct,
             is_consumption_flagged
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);
         `;
         const inputParams = [
           createdRun.id,
           item.item_id,
           item.planned_qty,
           item.actual_issued_qty,
-          item.good_production_qty || item.actual_issued_qty,
+          item.actual_consumed_qty || null,
+          item.good_production_qty || 0.0000,
           item.damaged_or_scrap_qty || 0.0000,
           item.returned_to_store_qty || 0.0000,
           item.uom_id,

@@ -67,28 +67,18 @@ export const productionService = {
       for (const input of explicitInputs) {
         const baseConsumed = await unitsRepository.computeBaseQuantity(
           input.item_id,
-          input.actual_issued_qty - (input.returned_to_store_qty || 0),
+          input.actual_issued_qty,
           input.uom_id
         );
-
-        const goodQty = input.good_production_qty !== undefined ? input.good_production_qty : input.actual_issued_qty;
-        const scrapQty = input.damaged_or_scrap_qty !== undefined ? input.damaged_or_scrap_qty : 0.0000;
-        const retQty = input.returned_to_store_qty !== undefined ? input.returned_to_store_qty : 0.0000;
-
-        // Mass balance check
-        if (Math.abs(input.actual_issued_qty - (goodQty + scrapQty + retQty)) > 0.0001) {
-          throw ApiError.badRequest(
-            `Mass balance violation: Issued (${input.actual_issued_qty}) must equal Good (${goodQty}) + Scrap (${scrapQty}) + Returned (${retQty})`
-          );
-        }
 
         inputLines.push({
           item_id: input.item_id,
           planned_qty: input.planned_qty,
           actual_issued_qty: input.actual_issued_qty,
-          good_production_qty: goodQty,
-          damaged_or_scrap_qty: scrapQty,
-          returned_to_store_qty: retQty,
+          actual_consumed_qty: null,
+          good_production_qty: 0.0000,
+          damaged_or_scrap_qty: 0.0000,
+          returned_to_store_qty: 0.0000,
           uom_id: input.uom_id,
           base_net_consumed_qty: baseConsumed,
           unit_cost_applied: 0.0000,
@@ -111,7 +101,8 @@ export const productionService = {
           item_id: mat.item_id,
           planned_qty: mat.total_required_qty,
           actual_issued_qty: mat.total_required_qty,
-          good_production_qty: mat.total_required_qty,
+          actual_consumed_qty: null,
+          good_production_qty: 0.0000,
           damaged_or_scrap_qty: 0.0000,
           returned_to_store_qty: 0.0000,
           uom_id: mat.uom_id,
@@ -180,32 +171,17 @@ export const productionService = {
           throw ApiError.badRequest(`Item '${inp.item_id}' is not an input item for this production run`);
         }
 
-        const actualIssued = inp.actual_issued_qty !== undefined ? inp.actual_issued_qty : parseFloat(existingInput.actual_issued_qty);
-        const goodQty = inp.good_production_qty !== undefined ? inp.good_production_qty : actualIssued;
-        const scrapQty = inp.damaged_or_scrap_qty !== undefined ? inp.damaged_or_scrap_qty : 0.0000;
-        const retQty = inp.returned_to_store_qty !== undefined ? inp.returned_to_store_qty : 0.0000;
+        const actualIssued = inp.actual_issued_qty !== undefined ? parseFloat(inp.actual_issued_qty) : parseFloat(existingInput.actual_issued_qty);
         const uomId = inp.uom_id || existingInput.uom_id;
-
-        // Mass balance validation
-        if (Math.abs(actualIssued - (goodQty + scrapQty + retQty)) > 0.0001) {
-          throw ApiError.badRequest(
-            `Mass balance error for item '${existingInput.item_name}': Issued (${actualIssued}) != Good (${goodQty}) + Scrap (${scrapQty}) + Returned (${retQty})`
-          );
-        }
-
-        const baseConsumed = await unitsRepository.computeBaseQuantity(
-          inp.item_id,
-          actualIssued - retQty,
-          uomId
-        );
+        const baseIssued = await unitsRepository.computeBaseQuantity(inp.item_id, actualIssued, uomId);
 
         updatedInputs.push({
           item_id: inp.item_id,
           actual_issued_qty: actualIssued,
-          good_production_qty: goodQty,
-          damaged_or_scrap_qty: scrapQty,
-          returned_to_store_qty: retQty,
-          base_net_consumed_qty: baseConsumed,
+          good_production_qty: 0.0000,
+          damaged_or_scrap_qty: 0.0000,
+          returned_to_store_qty: 0.0000,
+          base_net_consumed_qty: baseIssued,
         });
       }
 
@@ -262,14 +238,190 @@ export const productionService = {
       ? Math.round(((goodOutput - plannedYield) / plannedYield) * 10000) / 100
       : 0.00;
 
-    const tolerance = parseFloat(run.tolerance_variance_pct || 5.0);
+    const tolerance = parseFloat(run.tolerance_variance_pct || 3.0);
     const isYieldFlagged = Math.abs(yieldVariancePct) > tolerance;
 
     const client = await getClient();
     try {
       await client.query('BEGIN');
 
-      // 1. Update header actual output and variance
+      // 1. Process actual material consumption & calculate variance
+      if (yieldData.inputs && yieldData.inputs.length > 0) {
+        for (const inputData of yieldData.inputs) {
+          const existingInput = run.inputs.find((i) => i.item_id === inputData.item_id);
+          if (!existingInput) continue;
+
+          const plannedQty = parseFloat(existingInput.planned_qty);
+          const actualIssued = parseFloat(existingInput.actual_issued_qty);
+          const actualConsumed = parseFloat(
+            inputData.actual_consumed_qty !== undefined
+              ? inputData.actual_consumed_qty
+              : actualIssued
+          );
+          const scrapQty = parseFloat(inputData.damaged_or_scrap_qty || 0);
+          const goodQty = Math.max(0, actualConsumed - scrapQty);
+
+          // Consumption variance against standard BOM recipe (planned_qty)
+          const varianceQty = Math.round((actualConsumed - plannedQty) * 10000) / 10000;
+          const variancePct = plannedQty > 0
+            ? Math.round(((actualConsumed - plannedQty) / plannedQty) * 10000) / 100
+            : 0.00;
+          const isConsumptionFlagged = Math.abs(variancePct) > tolerance;
+
+          // Unit cost applied from pinned issue rate (or moving WAC)
+          let unitCost = parseFloat(existingInput.unit_cost_applied || 0);
+          if (unitCost <= 0) {
+            const stockCheck = await client.query(
+              'SELECT current_moving_wac FROM item_stock_balances WHERE item_id = $1',
+              [existingInput.item_id]
+            );
+            unitCost = parseFloat(stockCheck.rows[0]?.current_moving_wac || 0);
+          }
+
+          // Net consumed in base UOM
+          const baseNetConsumed = await unitsRepository.computeBaseQuantity(
+            existingInput.item_id,
+            actualConsumed,
+            existingInput.uom_id
+          );
+          const totalCost = Math.round(baseNetConsumed * unitCost * 100) / 100;
+
+          // INVENTORY ADJUSTMENT FOR CONSUMPTION VARIANCE (Prevent Double Deduction)
+          // Difference between what was actually consumed and what was physically issued
+          const issueDelta = actualConsumed - actualIssued;
+          const baseIssueDelta = await unitsRepository.computeBaseQuantity(
+            existingInput.item_id,
+            Math.abs(issueDelta),
+            existingInput.uom_id
+          );
+
+          if (issueDelta > 0.0001) {
+            // Extra material consumed beyond issued qty (e.g. Cooking Oil 10.5 L consumed vs 10.0 L issued -> +0.5 L)
+            const stockRes = await client.query(
+              'SELECT current_base_qty, current_moving_wac FROM item_stock_balances WHERE item_id = $1 FOR UPDATE',
+              [existingInput.item_id]
+            );
+            const currentStock = stockRes.rows[0] ? parseFloat(stockRes.rows[0].current_base_qty) : 0;
+            if (currentStock < baseIssueDelta) {
+              throw ApiError.badRequest(
+                `Insufficient stock for consumption variance of '${existingInput.item_name}'. Required: ${baseIssueDelta.toFixed(4)}, Available: ${currentStock.toFixed(4)}`
+              );
+            }
+
+            const deltaCost = Math.round(baseIssueDelta * unitCost * 100) / 100;
+
+            await client.query(
+              `UPDATE item_stock_balances 
+               SET current_base_qty = current_base_qty - $1,
+                   current_total_value = ROUND((current_base_qty - $1) * current_moving_wac, 2),
+                   last_transaction_timestamp = NOW(),
+                   updated_at = NOW()
+               WHERE item_id = $2`,
+              [baseIssueDelta, existingInput.item_id]
+            );
+
+            // Record immutable ledger entry for variance issue
+            await client.query(
+              `INSERT INTO inventory_ledger (
+                 transaction_timestamp,
+                 item_id,
+                 movement_type,
+                 transaction_qty,
+                 transaction_uom_id,
+                 base_quantity_delta,
+                 unit_cost,
+                 total_cost,
+                 production_run_input_id,
+                 source_reference_label,
+                 created_by
+               ) VALUES (NOW(), $1, 'PRODUCTION_ISSUE', $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [
+                existingInput.item_id,
+                issueDelta,
+                existingInput.uom_id,
+                -baseIssueDelta,
+                unitCost,
+                -deltaCost,
+                existingInput.id,
+                `${run.run_number} (Consumption Variance: +${issueDelta} ${existingInput.uom_id})`,
+                userId,
+              ]
+            );
+          } else if (issueDelta < -0.0001) {
+            // Material unconsumed returned to store (e.g. 11.0 L issued, 10.5 L consumed -> 0.5 L returned)
+            const returnedQty = Math.abs(issueDelta);
+            const returnCost = Math.round(baseIssueDelta * unitCost * 100) / 100;
+
+            await client.query(
+              `UPDATE item_stock_balances 
+               SET current_base_qty = current_base_qty + $1,
+                   current_total_value = ROUND((current_base_qty + $1) * current_moving_wac, 2),
+                   last_transaction_timestamp = NOW(),
+                   updated_at = NOW()
+               WHERE item_id = $2`,
+              [baseIssueDelta, existingInput.item_id]
+            );
+
+            await client.query(
+              `INSERT INTO inventory_ledger (
+                 transaction_timestamp,
+                 item_id,
+                 movement_type,
+                 transaction_qty,
+                 transaction_uom_id,
+                 base_quantity_delta,
+                 unit_cost,
+                 total_cost,
+                 production_run_input_id,
+                 source_reference_label,
+                 created_by
+               ) VALUES (NOW(), $1, 'PRODUCTION_RETURN', $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [
+                existingInput.item_id,
+                returnedQty,
+                existingInput.uom_id,
+                baseIssueDelta,
+                unitCost,
+                returnCost,
+                existingInput.id,
+                `${run.run_number} (Unused Return to Store: ${returnedQty} ${existingInput.uom_id})`,
+                userId,
+              ]
+            );
+          }
+
+          // Update production_run_inputs with actual consumption and computed variance
+          await client.query(
+            `UPDATE production_run_inputs
+             SET actual_consumed_qty = $1,
+                 good_production_qty = $2,
+                 damaged_or_scrap_qty = $3,
+                 returned_to_store_qty = $4,
+                 base_net_consumed_qty = $5,
+                 unit_cost_applied = $6,
+                 total_material_cost = $7,
+                 consumption_variance_qty = $8,
+                 consumption_variance_pct = $9,
+                 is_consumption_flagged = $10
+             WHERE id = $11`,
+            [
+              actualConsumed,
+              goodQty,
+              scrapQty,
+              issueDelta < -0.0001 ? Math.abs(issueDelta) : 0,
+              baseNetConsumed,
+              unitCost,
+              totalCost,
+              varianceQty,
+              variancePct,
+              isConsumptionFlagged,
+              existingInput.id,
+            ]
+          );
+        }
+      }
+
+      // 2. Update header actual output and variance
       await productionRepository.updateOutputAndVariance(
         id,
         {
@@ -281,12 +433,12 @@ export const productionService = {
         client
       );
 
-      // 2. Save overheads if provided
+      // 3. Save overheads if provided
       if (yieldData.overheads && yieldData.overheads.length > 0) {
         await productionRepository.saveOverheads(id, yieldData.overheads, client);
       }
 
-      // 3. Execute atomic PostgreSQL yield posting function
+      // 4. Execute atomic PostgreSQL yield posting function
       await productionRepository.executePostYield(id, userId, client);
 
       await client.query('COMMIT');

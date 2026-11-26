@@ -43,9 +43,17 @@ export const issueMaterialsSchema = z.object({
   ).optional(),
 });
 
+export const actualConsumptionInputSchema = z.object({
+  item_id: z.string().uuid('item_id must be a valid UUID'),
+  actual_consumed_qty: z.number().min(0, 'actual_consumed_qty cannot be negative'),
+  damaged_or_scrap_qty: z.number().min(0, 'damaged_or_scrap_qty cannot be negative').optional(),
+  returned_to_store_qty: z.number().min(0, 'returned_to_store_qty cannot be negative').optional(),
+});
+
 export const recordYieldAndCostingSchema = z.object({
   actual_good_output_qty: z.number().positive('actual_good_output_qty must be greater than zero'),
   actual_scrap_output_qty: z.number().min(0, 'actual_scrap_output_qty cannot be negative').default(0),
+  inputs: z.array(actualConsumptionInputSchema).optional(),
   overheads: z.array(overheadItemSchema).optional(),
 });
 

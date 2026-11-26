@@ -78,6 +78,7 @@ export const ProductionPage = () => {
   const [requirementsChecking, setRequirementsChecking] = useState(false);
   const [scheduleRequirements, setScheduleRequirements] = useState(null);
   const [issueOverrides, setIssueOverrides] = useState({});
+  const [consumptionInputs, setConsumptionInputs] = useState({});
 
   // Schedule New Run Form
   const [createForm, setCreateForm] = useState({
@@ -187,12 +188,20 @@ export const ProductionPage = () => {
 
         // Pre-fill material issue overrides
         const initialOverrides = {};
+        const initialConsumption = {};
         (run.inputs || []).forEach((inp) => {
-          initialOverrides[inp.item_id] = inp.actual_issued_qty !== null && inp.actual_issued_qty !== undefined
+          const issuedVal = inp.actual_issued_qty !== null && inp.actual_issued_qty !== undefined
             ? parseFloat(inp.actual_issued_qty)
             : parseFloat(inp.planned_qty || 0);
+          initialOverrides[inp.item_id] = issuedVal;
+
+          const consumedVal = inp.actual_consumed_qty !== null && inp.actual_consumed_qty !== undefined
+            ? parseFloat(inp.actual_consumed_qty)
+            : issuedVal;
+          initialConsumption[inp.item_id] = consumedVal;
         });
         setIssueOverrides(initialOverrides);
+        setConsumptionInputs(initialConsumption);
 
         // Pre-fill yield form
         setExecutionForm({
@@ -327,7 +336,7 @@ export const ProductionPage = () => {
 
   // Stage 3: Issue Materials
   const handleIssueMaterials = async (runId) => {
-    if (!window.confirm('Confirm raw material issue? This will deduct materials from Store Inventory at Moving Weighted Average Cost.')) {
+    if (!window.confirm('Confirm raw material issue to production floor? This will deduct materials from Store Inventory to WIP.')) {
       return;
     }
     try {
@@ -339,15 +348,12 @@ export const ProductionPage = () => {
           return {
             item_id: inp.item_id,
             actual_issued_qty: val,
-            good_production_qty: val,
-            damaged_or_scrap_qty: 0,
-            returned_to_store_qty: 0,
             uom_id: inp.uom_id,
           };
         }),
       };
       await api.post(`/production/${runId}/issue`, payload);
-      alert('Materials successfully issued to factory floor! Status updated to: MATERIALS_ISSUED');
+      alert('Materials successfully issued to factory floor! Status updated to: MATERIALS_ISSUED.\n\nFloor Supervisor can now record physical consumption in Stage 4.');
       await fetchData();
       await loadOrderWorkflow(runId);
     } catch (err) {
@@ -355,7 +361,7 @@ export const ProductionPage = () => {
     }
   };
 
-  // Stage 4-5: Record Yield & Overheads
+  // Stage 4-5: Record Actual Consumption, Yield & Overheads
   const handleRecordYield = async (e) => {
     e.preventDefault();
     if (!activeRunDetails) return;
@@ -364,6 +370,17 @@ export const ProductionPage = () => {
       const payload = {
         actual_good_output_qty: Number(executionForm.actual_good_output_qty),
         actual_scrap_output_qty: Number(executionForm.actual_scrap_output_qty || 0),
+        inputs: (activeRunDetails?.inputs || []).map((inp) => {
+          const consumedVal = consumptionInputs[inp.item_id] !== undefined
+            ? Number(consumptionInputs[inp.item_id])
+            : Number(inp.actual_issued_qty || inp.planned_qty);
+          return {
+            item_id: inp.item_id,
+            actual_consumed_qty: consumedVal,
+            damaged_or_scrap_qty: 0,
+            returned_to_store_qty: 0,
+          };
+        }),
         overheads: [
           ...(Number(executionForm.labour_cost) > 0
             ? [
@@ -388,7 +405,7 @@ export const ProductionPage = () => {
 
       await api.post(`/production/${activeRunDetails.id}/yield`, payload);
       alert(
-        'Production completed successfully!\n- Finished Goods stock received into Inventory Ledger.\n- Unit Moving WAC calculated.\n- Costing and mass balance variances posted.'
+        'Production completed successfully!\n- Finished Goods stock received into Inventory Ledger.\n- Actual material consumption & variance posted.\n- Unit Moving WAC calculated.'
       );
       await fetchData();
       await loadOrderWorkflow(activeRunDetails.id);
@@ -849,6 +866,118 @@ export const ProductionPage = () => {
                     </div>
                   </div>
 
+                  {/* Shop Floor Material Consumption Entry Table */}
+                  <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div>
+                        <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                          <Scale className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Actual Raw Material & Packaging Consumption (Floor Supervisor Entry)</span>
+                        </h5>
+                        <p className="text-[11px] text-slate-500">
+                          Enter actual quantities consumed during production. The standard BOM recipe remains unchanged.
+                        </p>
+                      </div>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-mono font-medium self-start sm:self-auto">
+                        Separated from Store Issuance
+                      </span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                      <table className="w-full text-left text-xs text-slate-600">
+                        <thead className="bg-slate-100 text-slate-700 uppercase font-semibold text-[10px]">
+                          <tr>
+                            <th className="py-2.5 px-3">Item / Material</th>
+                            <th className="py-2.5 px-3">Type</th>
+                            <th className="py-2.5 px-3 text-right">Standard BOM Req</th>
+                            <th className="py-2.5 px-3 text-right">Issued to Floor</th>
+                            <th className="py-2.5 px-3 text-right text-blue-900 font-bold">Actual Consumed Qty *</th>
+                            <th className="py-2.5 px-3">UOM</th>
+                            <th className="py-2.5 px-3 text-right">Variance Qty</th>
+                            <th className="py-2.5 px-3 text-center">Variance % & Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {(run.inputs || []).map((inp, idx) => {
+                            const planned = parseFloat(inp.planned_qty || 0);
+                            const issued = parseFloat(inp.actual_issued_qty || inp.planned_qty || 0);
+                            const currentConsumed = consumptionInputs[inp.item_id] !== undefined
+                              ? consumptionInputs[inp.item_id]
+                              : (inp.actual_consumed_qty !== null && inp.actual_consumed_qty !== undefined)
+                                ? parseFloat(inp.actual_consumed_qty)
+                                : issued;
+                            const consumedNum = Number(currentConsumed);
+                            const diff = consumedNum - planned;
+                            const pct = planned > 0 ? ((diff / planned) * 100).toFixed(1) : '0.0';
+                            const isOver = Math.abs(diff) > 0.0001;
+                            const isFlagged = Math.abs(diff / (planned || 1)) > 0.03;
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="py-2 px-3 font-medium text-slate-900">
+                                  {inp.item_name}
+                                  <span className="text-[10px] text-slate-400 block font-mono">
+                                    {inp.item_sku}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  <Badge variant={inp.item_type === 'packaging' ? 'warning' : 'primary'}>
+                                    {inp.item_type || 'raw_material'}
+                                  </Badge>
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-600">
+                                  {planned.toFixed(4)}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-500">
+                                  {issued.toFixed(4)}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    required
+                                    value={currentConsumed}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setConsumptionInputs((prev) => ({ ...prev, [inp.item_id]: val }));
+                                    }}
+                                    className="w-24 px-2 py-1 text-right font-mono font-bold text-xs border border-blue-400 rounded focus:ring-2 focus:ring-blue-500 bg-blue-50/50 text-blue-900"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 font-mono text-slate-500">
+                                  {inp.uom_id}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono">
+                                  {isOver ? (
+                                    <span className={diff > 0 ? 'text-amber-700 font-bold' : 'text-blue-700 font-bold'}>
+                                      {diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">0.00</span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  {!isOver ? (
+                                    <Badge variant="success">Standard (0.0%)</Badge>
+                                  ) : diff > 0 ? (
+                                    <Badge variant="warning" className="bg-amber-100 text-amber-800 border-amber-300">
+                                      +{pct}% {isFlagged ? '(Alert: High Consumption)' : ''}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="info">
+                                      {pct}%
+                                    </Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                   {/* Overheads breakdown */}
                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
                     <h5 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">
@@ -1094,41 +1223,109 @@ export const ProductionPage = () => {
 
                 {/* Material Consumption Variance */}
                 <Card title="Material Consumption & Mass Balance Variance">
+                  {run.inputs?.some((inp) => inp.is_consumption_flagged || Math.abs(parseFloat(inp.consumption_variance_pct || 0)) > 3.0) && (
+                    <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <strong className="font-semibold">Material Consumption Variance Alert:</strong>
+                        {run.inputs
+                          .filter((inp) => inp.is_consumption_flagged || Math.abs(parseFloat(inp.consumption_variance_pct || 0)) > 3.0)
+                          .map((inp, i) => {
+                            const varQty = parseFloat(inp.consumption_variance_qty || 0);
+                            const varPct = parseFloat(inp.consumption_variance_pct || 0);
+                            return (
+                              <div key={i} className="mt-0.5 font-medium">
+                                • <strong>{inp.item_name}</strong> consumption is{' '}
+                                <span className="font-mono font-bold text-amber-800">
+                                  {varQty > 0 ? `+${varQty.toFixed(2)}` : varQty.toFixed(2)} {inp.uom_id}
+                                </span>{' '}
+                                higher than the standard requirement ({varPct > 0 ? `+${varPct.toFixed(1)}%` : `${varPct.toFixed(1)}%`} positive consumption variance).
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <table className="w-full text-left text-xs text-slate-600">
                       <thead className="bg-slate-100 text-slate-700 uppercase font-semibold text-[10px]">
                         <tr>
-                          <th className="py-2.5 px-3">Ingredient</th>
-                          <th className="py-2.5 px-3 text-right">Standard Req</th>
-                          <th className="py-2.5 px-3 text-right">Actual Consumed</th>
+                          <th className="py-2.5 px-3">Ingredient / Item</th>
+                          <th className="py-2.5 px-3 text-right">Standard BOM Req</th>
+                          <th className="py-2.5 px-3 text-right">Issued to Floor</th>
+                          <th className="py-2.5 px-3 text-right text-slate-900 font-bold">Actual Consumed</th>
+                          <th className="py-2.5 px-3 text-right">Variance Qty</th>
+                          <th className="py-2.5 px-3 text-center">Variance % & Status</th>
                           <th className="py-2.5 px-3 text-right">Unit Moving WAC</th>
                           <th className="py-2.5 px-3 text-right">Total Line Cost</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {(run.inputs || []).map((inp, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="py-2 px-3 font-medium text-slate-900">
-                              {inp.item_name}
-                              <span className="text-[10px] text-slate-400 block font-mono">
-                                {inp.item_sku}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono">
-                              {parseFloat(inp.planned_qty || 0).toFixed(4)} {inp.uom_id}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              {parseFloat(inp.actual_issued_qty || inp.good_production_qty || 0).toFixed(4)}{' '}
-                              {inp.uom_id}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-700">
-                              ₹{parseFloat(inp.unit_cost_applied || 0).toFixed(2)}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-blue-700">
-                              ₹{parseFloat(inp.total_material_cost || 0).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
+                        {(run.inputs || []).map((inp, idx) => {
+                          const planned = parseFloat(inp.planned_qty || 0);
+                          const issued = parseFloat(inp.actual_issued_qty || inp.planned_qty || 0);
+                          const consumed = parseFloat(
+                            inp.actual_consumed_qty !== null && inp.actual_consumed_qty !== undefined
+                              ? inp.actual_consumed_qty
+                              : (inp.good_production_qty || inp.base_net_consumed_qty || 0)
+                          );
+                          const varQty = parseFloat(inp.consumption_variance_qty || (consumed - planned) || 0);
+                          const varPct = parseFloat(
+                            inp.consumption_variance_pct !== null && inp.consumption_variance_pct !== undefined
+                              ? inp.consumption_variance_pct
+                              : (planned > 0 ? ((consumed - planned) / planned) * 100 : 0)
+                          );
+                          const isFlagged = inp.is_consumption_flagged || Math.abs(varPct) > 3.0;
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50">
+                              <td className="py-2 px-3 font-medium text-slate-900">
+                                {inp.item_name}
+                                <span className="text-[10px] text-slate-400 block font-mono">
+                                  {inp.item_sku}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono">
+                                {planned.toFixed(4)} {inp.uom_id}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-slate-500">
+                                {issued.toFixed(4)} {inp.uom_id}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                                {consumed.toFixed(4)} {inp.uom_id}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono">
+                                {Math.abs(varQty) > 0.0001 ? (
+                                  <span className={varQty > 0 ? 'text-amber-700 font-bold' : 'text-blue-700 font-bold'}>
+                                    {varQty > 0 ? `+${varQty.toFixed(2)}` : varQty.toFixed(2)} {inp.uom_id}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">0.00 {inp.uom_id}</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                {Math.abs(varPct) < 0.01 ? (
+                                  <Badge variant="success">Standard (0.0%)</Badge>
+                                ) : varPct > 0 ? (
+                                  <Badge variant="warning" className="bg-amber-100 text-amber-800 border-amber-300">
+                                    +{varPct.toFixed(1)}% {isFlagged ? '(Alert: Positive Variance)' : ''}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="info">
+                                    {varPct.toFixed(1)}%
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-slate-700">
+                                ₹{parseFloat(inp.unit_cost_applied || 0).toFixed(2)}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-blue-700">
+                                ₹{parseFloat(inp.total_material_cost || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
