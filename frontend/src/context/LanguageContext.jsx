@@ -49,6 +49,7 @@ export const translations = {
     roleAdmin: 'Factory Admin Desk',
     roleSupervisor: 'Floor Supervisor',
     roleSalesman: 'Salesman A (Tamil Nadu)',
+    roleSalesmanB: 'Salesman B (Karnataka)',
     roleAuditor: 'Statutory Auditor',
 
     // Header & Global Actions
@@ -168,7 +169,8 @@ export const translations = {
     roleOwner: 'நிர்வாக இயக்குநர் (உரிமையாளர்)',
     roleAdmin: 'தொழிற்சாலை நிர்வாகி (Admin)',
     roleSupervisor: 'உற்பத்தி மேற்பார்வையாளர் (Supervisor)',
-    roleSalesman: 'விற்பனைப் பிரதிநிதி (தமிழ்நாடு)',
+    roleSalesman: 'விற்பனைப் பிரதிநிதி A (தமிழ்நாடு)',
+    roleSalesmanB: 'விற்பனைப் பிரதிநிதி B (கர்நாடகா)',
     roleAuditor: 'சட்டப்பூர்வ தணிக்கையாளர் (Auditor)',
 
     // Header & Global Actions

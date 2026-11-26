@@ -202,7 +202,9 @@ export const fulfilmentService = {
       throw ApiError.notFound(`Production requirement '${id}' not found`);
     }
 
-    const bomHeader = await bomsRepository.findActiveByProductId(requirement.product_id);
+    const bomHeader = (await bomsRepository.findActiveByProductId?.(requirement.product_id)) ||
+                      (await bomsRepository.findActiveByFinishedGoodItemId?.(requirement.product_id)) ||
+                      (await bomsService.findActiveByProductId?.(requirement.product_id));
     if (!bomHeader) {
       return {
         requirement,
@@ -214,6 +216,16 @@ export const fulfilmentService = {
       };
     }
     const bom = await bomsRepository.findById(bomHeader.id);
+    if (!bom) {
+      return {
+        requirement,
+        bom: null,
+        materials: [],
+        allMaterialsAvailable: false,
+        message: 'Active BOM details could not be loaded',
+        procurementRequirements: [],
+      };
+    }
 
     const reqOutputQty = parseFloat(requirement.production_qty_required);
     const bomCalc = await bomsService.calculateRequirements(bom.id, reqOutputQty, bom.batch_uom_id);
@@ -324,11 +336,16 @@ export const fulfilmentService = {
       throw ApiError.badRequest('This production requirement is already fulfilled');
     }
 
-    const bomHeader = await bomsRepository.findActiveByProductId(requirement.product_id);
+    const bomHeader = (await bomsRepository.findActiveByProductId?.(requirement.product_id)) ||
+                      (await bomsRepository.findActiveByFinishedGoodItemId?.(requirement.product_id)) ||
+                      (await bomsService.findActiveByProductId?.(requirement.product_id));
     if (!bomHeader) {
       throw ApiError.badRequest('No active BOM exists for this product');
     }
     const bom = await bomsRepository.findById(bomHeader.id);
+    if (!bom) {
+      throw ApiError.badRequest('Active BOM details could not be loaded');
+    }
 
     const stdBatch = parseFloat(bom.standard_batch_size || 200);
     const plannedBatches = data.planned_batch_count || Math.max(0.5, Math.ceil(parseFloat(requirement.production_qty_required) / stdBatch));

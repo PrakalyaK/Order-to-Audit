@@ -66,7 +66,12 @@ export const bomsRepository = {
       JOIN items i ON b.finished_good_item_id = i.id
       JOIN units_of_measure u ON b.batch_uom_id = u.id
       ${whereClause}
-      ORDER BY b.created_at DESC
+      ORDER BY 
+        CASE 
+          WHEN b.bom_code = 'BOM-MRK-200G' OR i.sku = 'FG-MRK-200G' OR i.name ILIKE '%murukku%' THEN 0 
+          ELSE 1 
+        END,
+        b.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1};
     `;
     params.push(limit, offset);
@@ -170,7 +175,13 @@ export const bomsRepository = {
    * Alias for finding active BOM by finished good ID
    */
   async findActiveByFinishedGoodItemId(finishedGoodItemId) {
-    return this.findActiveByProductId(finishedGoodItemId);
+    const text = `
+      SELECT id, bom_code, version_number
+      FROM boms
+      WHERE finished_good_item_id = $1 AND is_active = true;
+    `;
+    const res = await query(text, [finishedGoodItemId]);
+    return res.rows[0] || null;
   },
 
   /**

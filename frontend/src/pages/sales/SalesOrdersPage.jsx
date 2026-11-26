@@ -562,16 +562,16 @@ export const SalesOrdersPage = () => {
                 + Add Item
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {form.items.map((row, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="col-span-5">
-                    <label className="text-[10px] text-slate-400 block">Product</label>
+                <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="sm:col-span-5">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Product</label>
                     <select
                       required
                       value={row.item_id}
                       onChange={(e) => handleItemChange(idx, 'item_id', e.target.value)}
-                      className="w-full border border-slate-300 rounded p-1.5 text-xs"
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white"
                     >
                       <option value="">Select Product...</option>
                       {items.map((it) => (
@@ -581,31 +581,32 @@ export const SalesOrdersPage = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-3">
-                    <label className="text-[10px] text-slate-400 block">Quantity</label>
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Quantity (Packets)</label>
                     <input
                       type="number"
                       step="1"
+                      min="1"
                       required
                       value={row.quantity}
                       onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                      className="w-full border border-slate-300 rounded p-1.5 text-xs"
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono font-bold bg-white"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] text-slate-400 block">Unit Price (₹)</label>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Unit Price (₹)</label>
                     <input
                       type="number"
                       step="0.01"
                       required
                       value={row.unit_price}
                       onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
-                      className="w-full border border-slate-300 rounded p-1.5 text-xs"
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] text-slate-400 block">Subtotal</label>
-                    <div className="py-1.5 font-bold text-slate-900">
+                  <div className="sm:col-span-2 flex items-center sm:block justify-between">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Subtotal</label>
+                    <div className="py-2 font-mono font-bold text-slate-900 text-sm">
                       ₹{((Number(row.quantity) || 0) * (Number(row.unit_price) || 0)).toFixed(2)}
                     </div>
                   </div>
@@ -613,6 +614,42 @@ export const SalesOrdersPage = () => {
               ))}
             </div>
           </div>
+
+          {/* Live Order Pricing & Tax Calculation Summary */}
+          {(() => {
+            const selectedCust = customers.find((c) => c.id === form.customer_id);
+            const isInterstate = selectedCust && selectedCust.state_code && selectedCust.state_code !== '33';
+            const subtotal = form.items.reduce(
+              (sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.unit_price) || 0),
+              0
+            );
+            const gstAmount = Math.round(subtotal * 0.05 * 100) / 100;
+            const grandTotal = subtotal + gstAmount;
+
+            return (
+              <div className="p-3 bg-slate-100 rounded-lg border border-slate-200 space-y-1.5 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Taxable Value:</span>
+                  <span className="font-mono font-bold text-slate-900">₹{subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-500 text-[11px]">
+                  <span>
+                    Estimated GST (5% {isInterstate ? 'IGST Inter-State' : 'Intra-State CGST 2.5% + SGST 2.5%'}):
+                  </span>
+                  <span className="font-mono font-semibold text-slate-800">₹{gstAmount.toFixed(2)}</span>
+                </div>
+                <div className="pt-1.5 border-t border-slate-200 flex justify-between font-bold text-slate-900 text-sm">
+                  <span>Estimated Total Value:</span>
+                  <span className="font-mono text-blue-600 text-base">₹{grandTotal.toFixed(2)}</span>
+                </div>
+                {selectedCust && (
+                  <div className="text-[10px] text-slate-500 pt-1">
+                    Customer: <strong>{selectedCust.trade_name}</strong> • State: {selectedCust.state_name || (isInterstate ? 'Karnataka (29)' : 'Tamil Nadu (33)')} • Credit Limit: ₹{Number(selectedCust.credit_limit || 0).toLocaleString('en-IN')}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="pt-4 flex justify-end gap-2 border-t border-slate-100">
             <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>

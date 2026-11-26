@@ -384,10 +384,8 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'inventory_ledger' AND column_name = 'warehouse_id'
     ) THEN
-        SET session_replication_role = 'replica';
         ALTER TABLE inventory_ledger 
         ADD COLUMN warehouse_id UUID REFERENCES warehouses(id) ON DELETE RESTRICT DEFAULT 'ee000001-0000-0000-0000-000000000001';
-        SET session_replication_role = 'origin';
     END IF;
 END $$;
 

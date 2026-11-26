@@ -64,7 +64,14 @@ app.use(
       // Allow requests with no origin (e.g. mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
       const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-      if (env.corsOrigin.includes('*') || env.corsOrigin.includes(origin) || isLocalhost) {
+      const isVercel = /\.vercel\.app$/.test(new URL(origin).hostname);
+      if (
+        env.corsOrigin.includes('*') ||
+        env.corsOrigin.includes(origin) ||
+        isLocalhost ||
+        isVercel ||
+        process.env.VERCEL
+      ) {
         return callback(null, true);
       }
       return callback(new Error(`CORS policy does not allow access from origin: ${origin}`));

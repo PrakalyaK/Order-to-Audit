@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import { Card, StatCard, LoadingSpinner, Badge, Button } from '../../components/ui';
+import { useAuth, ROLES } from '../../context/AuthContext';
 import {
   TrendingUp,
   ShoppingBag,
@@ -13,6 +15,14 @@ import {
   RefreshCw,
   Receipt,
   Building,
+  Truck,
+  ShoppingCart,
+  Play,
+  ArrowRight,
+  Layers,
+  CheckCircle2,
+  FileSpreadsheet,
+  Users,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -28,6 +38,8 @@ import {
 } from 'recharts';
 
 export const DashboardPage = () => {
+  const { user, hasRole } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -86,10 +98,187 @@ export const DashboardPage = () => {
             Real-time operational metrics calculated directly from immutable PostgreSQL ledgers
           </p>
         </div>
-        <Button onClick={fetchDashboard} variant="outline" size="sm" icon={RefreshCw} loading={loading}>
-          Refresh Metrics
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={fetchDashboard} variant="outline" size="sm" icon={RefreshCw} loading={loading}>
+            Refresh Metrics
+          </Button>
+        </div>
       </div>
+
+      {/* Role-Specific Quick Action & Workspaces Banner */}
+      {user?.role === 'salesman' && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-emerald-600 text-white rounded-lg">
+                  <ShoppingCart className="w-4 h-4" />
+                </span>
+                <h3 className="font-bold text-slate-900 text-sm">Sales Field Workspace &bull; {user.name}</h3>
+                <Badge variant="success">Sales Representative</Badge>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                Book field orders directly with GST auto-calculation, track order approval status, and inspect retailer credit balances.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={ShoppingCart}
+                onClick={() => navigate('/sales/orders')}
+                className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto"
+              >
+                Place Field Order
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Users}
+                onClick={() => navigate('/parties')}
+                className="w-full sm:w-auto"
+              >
+                Retailer Directory
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user?.role === 'production_supervisor' && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-purple-500/10 border border-amber-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-amber-600 text-white rounded-lg">
+                  <Factory className="w-4 h-4" />
+                </span>
+                <h3 className="font-bold text-slate-900 text-sm">Shop Floor Supervisor Hub &bull; {user.name}</h3>
+                <Badge variant="warning">Floor Operations</Badge>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                Execute production runs with batch FEFO material issues, track real-time yield variances, and absorb labor & fuel overheads.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Play}
+                onClick={() => navigate('/production')}
+                className="bg-amber-600 hover:bg-amber-700 w-full sm:w-auto"
+              >
+                Active Production Runs
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Layers}
+                onClick={() => navigate('/master/boms')}
+                className="w-full sm:w-auto"
+              >
+                Recipe Catalogue
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user?.role === 'factory_admin' && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-blue-600 text-white rounded-lg">
+                  <Truck className="w-4 h-4" />
+                </span>
+                <h3 className="font-bold text-slate-900 text-sm">Factory Admin Desk &bull; {user.name}</h3>
+                <Badge variant="primary">Operations Control</Badge>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                Approve field sales orders, manage finished goods stock shortages, generate Production Requirements (PRQ), and post FEFO dispatches.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={CheckCircle2}
+                onClick={() => navigate('/sales/orders')}
+                className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+              >
+                Order Approvals
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Truck}
+                onClick={() => navigate('/sales/fulfilment')}
+                className="w-full sm:w-auto"
+              >
+                Fulfilment & Dispatch
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={ShoppingBag}
+                onClick={() => navigate('/purchases')}
+                className="w-full sm:w-auto"
+              >
+                Raw Material Inward
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user?.role === 'auditor' && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-rose-500/10 via-pink-500/10 to-slate-500/10 border border-rose-200">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-rose-600 text-white rounded-lg">
+                  <FileSpreadsheet className="w-4 h-4" />
+                </span>
+                <h3 className="font-bold text-slate-900 text-sm">Statutory Auditor Console &bull; {user.name}</h3>
+                <Badge variant="danger">Audit & Compliance</Badge>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                Verify tamper-proof append-only inventory ledgers, Moving WAC cost absorption, GSTR-1 tax compliance, and statutory balance sheets.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={FileSpreadsheet}
+                onClick={() => navigate('/reports/sales-register')}
+                className="bg-rose-600 hover:bg-rose-700 w-full sm:w-auto"
+              >
+                GST Outward Register
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Boxes}
+                onClick={() => navigate('/inventory/ledger')}
+                className="w-full sm:w-auto"
+              >
+                Inventory Ledger Audit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Receipt}
+                onClick={() => navigate('/accounting/trial-balance')}
+                className="w-full sm:w-auto"
+              >
+                Trial Balance
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

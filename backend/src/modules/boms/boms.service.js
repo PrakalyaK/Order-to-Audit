@@ -219,6 +219,14 @@ export const bomsService = {
     return await bomsRepository.setStatus(id, isActive);
   },
 
+  async findActiveByProductId(finishedGoodItemId) {
+    return await bomsRepository.findActiveByProductId(finishedGoodItemId);
+  },
+
+  async findActiveByFinishedGoodItemId(finishedGoodItemId) {
+    return await bomsRepository.findActiveByFinishedGoodItemId(finishedGoodItemId);
+  },
+
   /**
    * Calculate required materials for a requested production quantity
    */

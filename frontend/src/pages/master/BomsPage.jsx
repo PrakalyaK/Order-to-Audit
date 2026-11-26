@@ -303,32 +303,42 @@ export const BomsPage = () => {
     }
   };
 
-  // Filtered List
-  const filteredBoms = boms.filter((b) => {
-    const q = search.toLowerCase();
-    const name = (b.finished_good_name || b.item_name || '').toLowerCase();
-    const sku = (b.finished_good_sku || b.item_sku || '').toLowerCase();
-    const code = (b.bom_code || '').toLowerCase();
-    const matchesSearch = !q || name.includes(q) || sku.includes(q) || code.includes(q);
+  // Filtered & Sorted List (Murukku is always listed first)
+  const filteredBoms = boms
+    .filter((b) => {
+      const q = search.toLowerCase();
+      const name = (b.finished_good_name || b.item_name || '').toLowerCase();
+      const sku = (b.finished_good_sku || b.item_sku || '').toLowerCase();
+      const code = (b.bom_code || '').toLowerCase();
+      const matchesSearch = !q || name.includes(q) || sku.includes(q) || code.includes(q);
 
-    const matchesStatus =
-      statusFilter === 'all'
-        ? true
-        : statusFilter === 'active'
-        ? b.is_active === true
-        : b.is_active === false;
+      const matchesStatus =
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'active'
+          ? b.is_active === true
+          : b.is_active === false;
 
-    const matchesCategory =
-      categoryFilter === 'all'
-        ? true
-        : categoryFilter === '100g'
-        ? name.includes('100g') || sku.includes('100g')
-        : categoryFilter === '200g'
-        ? name.includes('200g') || sku.includes('200g')
-        : true;
+      const matchesCategory =
+        categoryFilter === 'all'
+          ? true
+          : categoryFilter === '100g'
+          ? name.includes('100g') || sku.includes('100g')
+          : categoryFilter === '200g'
+          ? name.includes('200g') || sku.includes('200g')
+          : true;
 
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
+      return matchesSearch && matchesStatus && matchesCategory;
+    })
+    .sort((a, b) => {
+      const aName = (a.finished_good_name || a.item_name || '').toLowerCase();
+      const bName = (b.finished_good_name || b.item_name || '').toLowerCase();
+      const isMurukkuA = a.bom_code === 'BOM-MRK-200G' || a.finished_good_sku === 'FG-MRK-200G' || aName.includes('murukku');
+      const isMurukkuB = b.bom_code === 'BOM-MRK-200G' || b.finished_good_sku === 'FG-MRK-200G' || bName.includes('murukku');
+      if (isMurukkuA && !isMurukkuB) return -1;
+      if (!isMurukkuA && isMurukkuB) return 1;
+      return 0;
+    });
 
   // KPI Calculations
   const totalBoms = boms.length;

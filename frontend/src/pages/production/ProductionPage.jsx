@@ -61,6 +61,7 @@ export const ProductionPage = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [requirementsChecking, setRequirementsChecking] = useState(false);
   const [scheduleRequirements, setScheduleRequirements] = useState(null);
+  const [issueOverrides, setIssueOverrides] = useState({});
 
   // Schedule New Run Form
   const [createForm, setCreateForm] = useState({
@@ -118,7 +119,17 @@ export const ProductionPage = () => {
 
       if (bomsRes.status === 'fulfilled' && bomsRes.value?.success) {
         const raw = bomsRes.value.data?.boms ?? bomsRes.value.data;
-        setBoms(Array.isArray(raw) ? raw : []);
+        const bomsList = Array.isArray(raw) ? raw : [];
+        bomsList.sort((a, b) => {
+          const aName = (a.finished_good_name || a.item_name || '').toLowerCase();
+          const bName = (b.finished_good_name || b.item_name || '').toLowerCase();
+          const isA = a.bom_code === 'BOM-MRK-200G' || a.finished_good_sku === 'FG-MRK-200G' || aName.includes('murukku');
+          const isB = b.bom_code === 'BOM-MRK-200G' || b.finished_good_sku === 'FG-MRK-200G' || bName.includes('murukku');
+          if (isA && !isB) return -1;
+          if (!isA && isB) return 1;
+          return 0;
+        });
+        setBoms(bomsList);
       } else {
         setBoms([]);
       }
@@ -157,6 +168,15 @@ export const ProductionPage = () => {
       if (res.success && res.data) {
         const run = res.data;
         setActiveRunDetails(run);
+
+        // Pre-fill material issue overrides
+        const initialOverrides = {};
+        (run.inputs || []).forEach((inp) => {
+          initialOverrides[inp.item_id] = inp.actual_issued_qty !== null && inp.actual_issued_qty !== undefined
+            ? parseFloat(inp.actual_issued_qty)
+            : parseFloat(inp.planned_qty || 0);
+        });
+        setIssueOverrides(initialOverrides);
 
         // Pre-fill yield form
         setExecutionForm({
@@ -295,7 +315,22 @@ export const ProductionPage = () => {
       return;
     }
     try {
-      await api.post(`/production/${runId}/issue`);
+      const payload = {
+        inputs: (activeRunDetails?.inputs || []).map((inp) => {
+          const val = issueOverrides[inp.item_id] !== undefined
+            ? Number(issueOverrides[inp.item_id])
+            : Number(inp.actual_issued_qty || inp.planned_qty);
+          return {
+            item_id: inp.item_id,
+            actual_issued_qty: val,
+            good_production_qty: val,
+            damaged_or_scrap_qty: 0,
+            returned_to_store_qty: 0,
+            uom_id: inp.uom_id,
+          };
+        }),
+      };
+      await api.post(`/production/${runId}/issue`, payload);
       alert('Materials successfully issued to factory floor! Status updated to: MATERIALS_ISSUED');
       await fetchData();
       await loadOrderWorkflow(runId);
@@ -316,21 +351,21 @@ export const ProductionPage = () => {
         overheads: [
           ...(Number(executionForm.labour_cost) > 0
             ? [
-                {
-                  overhead_type: 'labour',
-                  description: 'Factory Direct Labour',
-                  amount: Number(executionForm.labour_cost),
-                },
-              ]
+              {
+                overhead_type: 'labour',
+                description: 'Factory Direct Labour',
+                amount: Number(executionForm.labour_cost),
+              },
+            ]
             : []),
           ...(Number(executionForm.power_cost) > 0
             ? [
-                {
-                  overhead_type: 'power_gas',
-                  description: 'Factory Power & Fuel',
-                  amount: Number(executionForm.power_cost),
-                },
-              ]
+              {
+                overhead_type: 'power_gas',
+                description: 'Factory Power & Fuel',
+                amount: Number(executionForm.power_cost),
+              },
+            ]
             : []),
         ],
       };
@@ -362,12 +397,12 @@ export const ProductionPage = () => {
       statusFilter === 'all'
         ? true
         : statusFilter === 'draft'
-        ? s === 'draft'
-        : statusFilter === 'materials_issued'
-        ? s === 'materials_issued' || s === 'in_progress'
-        : statusFilter === 'completed'
-        ? s === 'completed'
-        : true;
+          ? s === 'draft'
+          : statusFilter === 'materials_issued'
+            ? s === 'materials_issued' || s === 'in_progress'
+            : statusFilter === 'completed'
+              ? s === 'completed'
+              : true;
 
     return matchesSearch && matchesStatus;
   });
@@ -476,13 +511,12 @@ export const ProductionPage = () => {
               return (
                 <div
                   key={stage.id}
-                  className={`flex flex-col p-2.5 rounded-lg border transition-all ${
-                    isDone
+                  className={`flex flex-col p-2.5 rounded-lg border transition-all ${isDone
                       ? 'bg-emerald-50/70 border-emerald-200 text-emerald-800'
                       : isInProg
-                      ? 'bg-blue-50 border-blue-300 text-blue-800 ring-2 ring-blue-500/20'
-                      : 'bg-slate-50 border-slate-200 text-slate-400'
-                  }`}
+                        ? 'bg-blue-50 border-blue-300 text-blue-800 ring-2 ring-blue-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-400'
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-mono font-bold">STAGE {stage.id}</span>
@@ -631,36 +665,82 @@ export const ProductionPage = () => {
                             );
                           })
                         ) : run.inputs?.length > 0 ? (
-                          run.inputs.map((inp, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50">
-                              <td className="py-2.5 px-3 font-medium text-slate-900">
-                                {inp.item_name}
-                                <span className="text-[10px] text-slate-400 block font-mono">
-                                  {inp.item_sku}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3">
-                                <Badge
-                                  variant={inp.item_type === 'packaging' ? 'warning' : 'primary'}
-                                >
-                                  {inp.item_type || 'raw_material'}
-                                </Badge>
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-medium">
-                                {parseFloat(inp.planned_qty || 0).toFixed(4)}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                                {parseFloat(inp.actual_issued_qty || inp.planned_qty || 0).toFixed(4)}
-                              </td>
-                              <td className="py-2.5 px-3 font-mono text-slate-500">
-                                {inp.uom_id || 'KG'}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono text-slate-400">—</td>
-                              <td className="py-2.5 px-3 text-center">
-                                <Badge variant="success">Standard Recipe</Badge>
-                              </td>
-                            </tr>
-                          ))
+                          run.inputs.map((inp, idx) => {
+                            const planned = parseFloat(inp.planned_qty || 0);
+                            const currentVal = issueOverrides[inp.item_id] !== undefined
+                              ? issueOverrides[inp.item_id]
+                              : parseFloat(inp.actual_issued_qty || inp.planned_qty || 0);
+                            const actualNum = Number(currentVal);
+                            const diff = actualNum - planned;
+                            const pct = planned > 0 ? ((diff / planned) * 100).toFixed(1) : '0.0';
+                            const isOver = Math.abs(diff) > 0.0001;
+                            const isFlagged = Math.abs(diff / (planned || 1)) > 0.03;
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="py-2.5 px-3 font-medium text-slate-900">
+                                  {inp.item_name}
+                                  <span className="text-[10px] text-slate-400 block font-mono">
+                                    {inp.item_sku}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <Badge
+                                    variant={inp.item_type === 'packaging' ? 'warning' : 'primary'}
+                                  >
+                                    {inp.item_type || 'raw_material'}
+                                  </Badge>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-medium text-slate-600">
+                                  {planned.toFixed(4)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">
+                                  {isDraft ? (
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        setIssueOverrides((prev) => ({ ...prev, [inp.item_id]: v }));
+                                      }}
+                                      className="w-24 px-2 py-1 text-right font-mono font-bold text-xs border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 bg-white"
+                                    />
+                                  ) : (
+                                    <span className="font-bold text-slate-900">
+                                      {parseFloat(inp.actual_issued_qty || inp.planned_qty || 0).toFixed(4)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-slate-500">
+                                  {inp.uom_id || 'KG'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">
+                                  {isOver ? (
+                                    <span className={diff > 0 ? 'text-amber-700 font-bold' : 'text-slate-600'}>
+                                      {diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">0.00</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {!isOver ? (
+                                    <Badge variant="success">Standard</Badge>
+                                  ) : diff > 0 ? (
+                                    <Badge variant="warning" className="bg-amber-100 text-amber-800">
+                                      +{pct}% {isFlagged ? '(Flagged)' : ''}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="danger">
+                                      {pct}%
+                                    </Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td colSpan="7" className="py-4 text-center text-slate-400">
@@ -714,14 +794,25 @@ export const ProductionPage = () => {
                         }
                         className="w-full border border-slate-300 rounded-lg p-2 font-mono text-base font-bold text-slate-900 bg-white"
                       />
-                      <span className="text-[10px] text-slate-400 mt-0.5 block">
-                        Planned standard yield: {plannedYield} packets
-                      </span>
+                      <div className="flex justify-between items-center text-[10px] text-slate-500 mt-0.5">
+                        <span>Planned standard yield: {plannedYield} packets</span>
+                        {Number(executionForm.actual_good_output_qty) > 0 && (
+                          <span
+                            className={`font-mono font-bold ${Math.abs(((Number(executionForm.actual_good_output_qty) - plannedYield) / (plannedYield || 1)) * 100) > 3.0
+                                ? 'text-rose-600'
+                                : 'text-emerald-600'
+                              }`}
+                          >
+                            Yield Variance: {(((Number(executionForm.actual_good_output_qty) - plannedYield) / (plannedYield || 1)) * 100).toFixed(1)}%
+                            {Math.abs(((Number(executionForm.actual_good_output_qty) - plannedYield) / (plannedYield || 1)) * 100) > 3.0 ? ' (Flagged)' : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
-                        Actual Damaged / Scrap Output (Packets)
+                        Actual Damaged / Scrap Output (Packets / Pouches)
                       </label>
                       <input
                         type="number"
@@ -736,8 +827,8 @@ export const ProductionPage = () => {
                         }
                         className="w-full border border-slate-300 rounded-lg p-2 font-mono text-slate-800 bg-white"
                       />
-                      <span className="text-[10px] text-slate-400 mt-0.5 block">
-                        Factory floor rejects or defective packs
+                      <span className="text-[10px] text-slate-500 mt-0.5 block">
+                        Recorded as packaging wastage (e.g. 6 damaged pouches, not added to good output)
                       </span>
                     </div>
                   </div>
@@ -886,6 +977,16 @@ export const ProductionPage = () => {
               <div className="lg:col-span-2 space-y-4">
                 <Card title="Batch Costing Breakdown (Unit Absorption Model)">
                   <div className="space-y-4 text-xs">
+                    <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg text-blue-900 text-[11px] flex items-center justify-between">
+                      <div>
+                        <strong>Costing & Valuation Method:</strong> Moving Weighted Average Costing (WAC)
+                        <span className="block text-slate-600 text-[10px]">
+                          Raw & packaging materials valued at inward WAC; Direct Overheads (Labour ₹1,200 + Power ₹600 = ₹1,800) absorbed into good output.
+                        </span>
+                      </div>
+                      <Badge variant="primary">Moving WAC</Badge>
+                    </div>
+
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                         <span className="text-[10px] font-bold uppercase text-slate-400 block">
@@ -1038,11 +1139,10 @@ export const ProductionPage = () => {
                       <div className="pt-2 border-t border-slate-200 flex justify-between items-center">
                         <span className="font-bold text-slate-700">Yield Variance:</span>
                         <span
-                          className={`font-mono font-bold text-xs px-2 py-0.5 rounded ${
-                            Math.abs(yieldVarPct) <= (run.tolerance_variance_pct || 3.0)
+                          className={`font-mono font-bold text-xs px-2 py-0.5 rounded ${Math.abs(yieldVarPct) <= (run.tolerance_variance_pct || 3.0)
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-rose-100 text-rose-800'
-                          }`}
+                            }`}
                         >
                           {yieldVarPct > 0 ? `+${yieldVarPct}%` : `${yieldVarPct}%`}
                         </span>
@@ -1226,8 +1326,8 @@ export const ProductionPage = () => {
                       <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
                         {r.actual_good_output_qty || r.actual_output_qty
                           ? `${parseFloat(
-                              r.actual_good_output_qty || r.actual_output_qty
-                            ).toLocaleString('en-IN')} PKT`
+                            r.actual_good_output_qty || r.actual_output_qty
+                          ).toLocaleString('en-IN')} PKT`
                           : '—'}
                       </td>
                       <td className="py-3 px-4 text-center">{getStatusBadge(r.status)}</td>

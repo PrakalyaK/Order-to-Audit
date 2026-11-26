@@ -14,6 +14,7 @@ export const DEMO_PERSONAS = [
   { username: 'admin_factory', role: ROLES.FACTORY_ADMIN, label: 'Factory Admin Desk', badgeColor: 'bg-blue-100 text-blue-800 border-blue-200' },
   { username: 'supervisor_floor', role: ROLES.PRODUCTION_SUPERVISOR, label: 'Floor Supervisor', badgeColor: 'bg-amber-100 text-amber-800 border-amber-200' },
   { username: 'salesman_a', role: ROLES.SALESMAN, label: 'Salesman A (Tamil Nadu)', badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  { username: 'salesman_b', role: ROLES.SALESMAN, label: 'Salesman B (Karnataka)', badgeColor: 'bg-teal-100 text-teal-800 border-teal-200' },
   { username: 'auditor_ext', role: ROLES.AUDITOR, label: 'Statutory Auditor', badgeColor: 'bg-rose-100 text-rose-800 border-rose-200' },
 ];
 

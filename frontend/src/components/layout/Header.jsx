@@ -132,6 +132,7 @@ export const Header = () => {
               if (p.role === 'owner') localizedLabel = t('roleOwner');
               else if (p.role === 'factory_admin') localizedLabel = t('roleAdmin');
               else if (p.role === 'production_supervisor') localizedLabel = t('roleSupervisor');
+              else if (p.username === 'salesman_b') localizedLabel = t('roleSalesmanB');
               else if (p.role === 'salesman') localizedLabel = t('roleSalesman');
               else if (p.role === 'auditor') localizedLabel = t('roleAuditor');
 

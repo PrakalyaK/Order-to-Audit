@@ -3,7 +3,27 @@ import { env } from './env.js';
 
 const { Pool } = pg;
 
-export const pool = new Pool(env.db);
+const poolConfig = env.db.connectionString
+  ? {
+      connectionString: env.db.connectionString,
+      ssl: env.db.ssl,
+      max: env.db.max,
+      idleTimeoutMillis: env.db.idleTimeoutMillis,
+      connectionTimeoutMillis: env.db.connectionTimeoutMillis,
+    }
+  : {
+      host: env.db.host,
+      port: env.db.port,
+      database: env.db.database,
+      user: env.db.user,
+      password: env.db.password,
+      ssl: env.db.ssl,
+      max: env.db.max,
+      idleTimeoutMillis: env.db.idleTimeoutMillis,
+      connectionTimeoutMillis: env.db.connectionTimeoutMillis,
+    };
+
+export const pool = new Pool(poolConfig);
 
 // Prevent unhandled errors on idle clients from terminating the process
 pool.on('error', (err) => {

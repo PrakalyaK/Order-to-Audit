@@ -156,6 +156,13 @@ test('Order-to-Audit: Bill of Materials (BOM) Management Tests', async (t) => {
       return null;
     };
 
+    bomsRepository.findActiveByFinishedGoodItemId = async (fgId) => {
+      for (const b of mockBoms.values()) {
+        if (b.finished_good_item_id === fgId && b.is_active) return b;
+      }
+      return null;
+    };
+
     bomsRepository.isUsedInProduction = async (bomId) => bomId === productionLockedBomId;
 
     bomsRepository.createWithMaterials = async (bomData, materials) => {

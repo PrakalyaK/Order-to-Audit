@@ -5,8 +5,10 @@ import { pool } from '../config/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Root of project is 3 levels up from backend/src/scripts/
-const PROJECT_ROOT = path.resolve(__dirname, '../../../');
+// Root of project is either process.cwd() (on Vercel) or 3 levels up from backend/src/scripts/
+const PROJECT_ROOT = process.env.VERCEL
+  ? process.cwd()
+  : path.resolve(__dirname, '../../../');
 
 /**
  * Ordered list of migrations required for a fresh database setup
