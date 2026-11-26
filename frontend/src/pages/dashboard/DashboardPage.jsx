@@ -416,7 +416,39 @@ export const DashboardPage = () => {
       </div>
 
       {/* Operational Feeds Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Live Stock on Hand */}
+        <Card title="Live Stock on Hand" subtitle="Real-time physical balances">
+          <div className="divide-y divide-slate-100">
+            {Array.isArray(inventory?.stock_highlights) && inventory.stock_highlights.length > 0 ? (
+              inventory.stock_highlights.slice(0, 5).map((stk) => (
+                <div key={stk.item_id || stk.sku} className="py-2.5 flex items-center justify-between text-xs">
+                  <div className="min-w-0 pr-2">
+                    <span className="font-semibold text-slate-800 truncate block">{stk.item_name}</span>
+                    <p className="text-[11px] text-slate-400 font-mono">{stk.sku}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-mono font-bold text-slate-900 bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md text-xs">
+                      {parseFloat(stk.closing_stock_base_qty || 0).toLocaleString('en-IN', { minimumFractionDigits: 1 })} {stk.base_uom_id}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400 py-4 text-center">No stock balances recorded</p>
+            )}
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => navigate('/inventory')}
+                className="text-xs text-blue-600 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                Inspect All Items in Inventory &rarr;
+              </button>
+            </div>
+          </div>
+        </Card>
+
         {/* Recent Invoices */}
         <Card title="Recent Invoices" subtitle="Latest billed customer invoices">
           <div className="divide-y divide-slate-100">

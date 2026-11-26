@@ -104,6 +104,21 @@ export const reportsRepository = {
       LIMIT 5;
     `);
 
+    const stockHighlights = await query(`
+      SELECT item_id, sku, item_name, item_type, base_uom_id, closing_stock_base_qty, current_moving_wac, total_stock_valuation
+      FROM v_current_stock
+      WHERE closing_stock_base_qty > 0
+      ORDER BY 
+        CASE 
+          WHEN sku = 'FG-MRK-200G' THEN 1
+          WHEN sku LIKE 'RM-%FLOUR%' OR sku LIKE '%BESAN%' THEN 2
+          WHEN item_type = 'finished_good' THEN 3
+          ELSE 4
+        END,
+        closing_stock_base_qty DESC
+      LIMIT 6;
+    `);
+
     return {
       sales: {
         total_sales: parseFloat(salesRes.rows[0].total_sales),
@@ -120,6 +135,7 @@ export const reportsRepository = {
         distinct_items_count: parseInt(invValRes.rows[0].distinct_items_count, 10),
         low_stock_count: parseInt(lowStockRes.rows[0].low_stock_count, 10),
         near_expiry_count: parseInt(nearExpiryRes.rows[0].near_expiry_count, 10),
+        stock_highlights: stockHighlights.rows,
       },
       production: {
         active_runs_count: parseInt(prodRes.rows[0].active_runs_count || 0, 10),

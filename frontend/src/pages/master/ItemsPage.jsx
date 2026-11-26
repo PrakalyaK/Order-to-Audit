@@ -175,48 +175,63 @@ export const ItemsPage = () => {
                   <th className="py-3 px-4">SKU / Code</th>
                   <th className="py-3 px-4">Item Name</th>
                   <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">HSN / GST</th>
+                  <th className="py-3 px-4 text-right">Available Stock</th>
                   <th className="py-3 px-4">Base UOM</th>
+                  <th className="py-3 px-4">HSN / GST</th>
                   <th className="py-3 px-4 text-right">Standard Rate</th>
                   <th className="py-3 px-4 text-right">Selling Price</th>
                   <th className="py-3 px-4 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-blue-600">{item.sku}</td>
-                    <td className="py-3 px-4 font-medium text-slate-900">{item.name}</td>
-                    <td className="py-3 px-4">
-                      <Badge
-                        variant={
-                          item.item_type === 'finished_good' || item.item_type === 'finished_goods'
-                            ? 'purple'
-                            : item.item_type === 'raw_material'
-                            ? 'primary'
-                            : 'warning'
-                        }
-                      >
-                        {item.item_type.replace('_', ' ')}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-[11px]">
-                      {item.hsn_code} <span className="text-slate-400">({item.gst_rate_pct}%)</span>
-                    </td>
-                    <td className="py-3 px-4 font-medium">{item.base_uom_name || 'Units'}</td>
-                    <td className="py-3 px-4 text-right font-medium">
-                      ₹{parseFloat(item.standard_purchase_rate || 0).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 text-right font-semibold text-slate-900">
-                      ₹{parseFloat(item.standard_selling_price || 0).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant={item.is_active ? 'success' : 'default'}>
-                        {item.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
+                {items.map((item) => {
+                  const stockQty = parseFloat(item.current_stock_qty || item.closing_stock_base_qty || 0);
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-mono font-semibold text-blue-600">{item.sku}</td>
+                      <td className="py-3 px-4 font-medium text-slate-900">{item.name}</td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant={
+                            item.item_type === 'finished_good' || item.item_type === 'finished_goods'
+                              ? 'purple'
+                              : item.item_type === 'raw_material'
+                              ? 'primary'
+                              : 'warning'
+                          }
+                        >
+                          {item.item_type.replace('_', ' ')}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                        <span
+                          className={
+                            stockQty > 0
+                              ? 'bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200'
+                              : 'bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md'
+                          }
+                        >
+                          {stockQty.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} {item.base_uom_name || item.base_uom_id}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-medium">{item.base_uom_name || 'Units'}</td>
+                      <td className="py-3 px-4 font-mono text-[11px]">
+                        {item.hsn_code} <span className="text-slate-400">({item.gst_rate_pct}%)</span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-medium">
+                        ₹{parseFloat(item.standard_purchase_rate || 0).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-right font-semibold text-slate-900">
+                        ₹{parseFloat(item.standard_selling_price || 0).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <Badge variant={item.is_active ? 'success' : 'default'}>
+                          {item.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

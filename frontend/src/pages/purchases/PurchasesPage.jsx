@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/client';
 import { Card, Button, Badge, LoadingSpinner, Modal, EmptyState } from '../../components/ui';
-import { ShoppingBag, Plus, Eye, CheckCircle2, Printer, Search } from 'lucide-react';
+import { ShoppingBag, Plus, Eye, CheckCircle2, Printer, Search, Package, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth, ROLES } from '../../context/AuthContext';
 
 export const PurchasesPage = () => {
@@ -40,6 +40,7 @@ export const PurchasesPage = () => {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [autoReceive, setAutoReceive] = useState(true);
 
   // Bill creation form
   const [form, setForm] = useState({
@@ -171,7 +172,18 @@ export const PurchasesPage = () => {
           };
         }),
       };
-      await api.post('/purchases', payload);
+      const res = await api.post('/purchases', payload);
+      const created = res.data?.purchase || res.data;
+      if (autoReceive && created?.id) {
+        try {
+          await api.post(`/purchases/${created.id}/receive`);
+          alert(`Purchase bill "${form.bill_number}" created and received into warehouse stock! Available inventory has been updated.`);
+        } catch (recErr) {
+          alert(`Bill created in draft, but auto-receive warning: ${recErr.message}. You can click "Receive" to post to stock.`);
+        }
+      } else {
+        alert(`Purchase bill "${form.bill_number}" created in DRAFT status. Click "Receive into Stock" to post to inventory.`);
+      }
       setCreateModalOpen(false);
       fetchData();
     } catch (err) {
@@ -201,6 +213,21 @@ export const PurchasesPage = () => {
             Create Purchase Bill
           </Button>
         )}
+      </div>
+
+      {/* Stock Inward Guide Banner */}
+      <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+        <span className="p-1.5 bg-blue-600 text-white rounded-lg shrink-0 mt-0.5">
+          <Package className="w-4 h-4" />
+        </span>
+        <div className="text-xs text-blue-900 leading-relaxed">
+          <p className="font-semibold text-blue-950">How Raw Material Purchases Flow into Inventory Stock:</p>
+          <p className="mt-0.5 text-blue-800">
+            When you create a purchase bill (e.g. Rice Flour, Besan, Cooking Oil), the shipment must be <strong>RECEIVED</strong> to update warehouse balances.
+            Bills marked with <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[11px] font-semibold">✓ IN STOCK</span> are already credited into your <strong>Inventory</strong> (<span className="font-mono">/inventory</span>).
+            If a bill is in <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[11px] font-semibold">DRAFT</span>, simply click <strong>"Receive into Stock"</strong> to post the items into the inventory ledger immediately.
+          </p>
+        </div>
       </div>
 
       {/* Filter / Search */}
@@ -260,8 +287,8 @@ export const PurchasesPage = () => {
                         ₹{parseFloat(b.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <Badge variant={b.status === 'received' ? 'success' : 'default'}>
-                          {b.status.toUpperCase()}
+                        <Badge variant={b.status === 'received' ? 'success' : 'warning'}>
+                          {b.status === 'received' ? '✓ IN STOCK' : 'DRAFT (ACTION NEEDED)'}
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -276,7 +303,7 @@ export const PurchasesPage = () => {
                               icon={CheckCircle2}
                               onClick={() => handleReceiveBill(b.id)}
                             >
-                              Receive
+                              Receive into Stock
                             </Button>
                           )}
                         </div>
@@ -506,12 +533,29 @@ export const PurchasesPage = () => {
             </div>
           </div>
 
+          {/* Immediate Inward Stock Checkbox */}
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              id="autoReceive"
+              checked={autoReceive}
+              onChange={(e) => setAutoReceive(e.target.checked)}
+              className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
+            />
+            <label htmlFor="autoReceive" className="text-xs text-blue-900 font-medium cursor-pointer">
+              Receive goods into inventory immediately upon posting (Goods Receipt Note)
+              <span className="block text-[11px] text-blue-700 font-normal mt-0.5">
+                Automatically posts raw material quantities into warehouse stock and updates Moving WAC valuation.
+              </span>
+            </label>
+          </div>
+
           <div className="pt-4 flex justify-end gap-2 border-t border-slate-100">
             <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" loading={submitting}>
-              Post Bill
+              {autoReceive ? 'Post Bill & Receive into Stock' : 'Save Draft Bill'}
             </Button>
           </div>
         </form>

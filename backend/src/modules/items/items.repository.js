@@ -41,16 +41,19 @@ export const itemsRepository = {
     const countRes = await query(countSql, params);
     const total = parseInt(countRes.rows[0].total, 10);
 
-    // Fetch paginated rows with UOM details
+    // Fetch paginated rows with UOM details and real-time inventory stock
     const dataSql = `
       SELECT 
         i.id, i.sku, i.name, i.item_type, i.base_uom_id,
         u.name AS base_uom_name, u.dimension AS uom_dimension,
         i.hsn_code, i.gst_rate_pct, i.standard_selling_price, i.standard_purchase_rate,
         i.min_reorder_level, i.packets_per_carton, i.is_active,
+        COALESCE(cs.closing_stock_base_qty, 0) AS current_stock_qty,
+        COALESCE(cs.current_moving_wac, i.standard_purchase_rate, 0) AS current_wac,
         i.created_at, i.updated_at
       FROM items i
       JOIN units_of_measure u ON i.base_uom_id = u.id
+      LEFT JOIN v_current_stock cs ON cs.item_id = i.id
       ${whereClause}
       ORDER BY i.name ASC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1};
@@ -78,9 +81,12 @@ export const itemsRepository = {
         u.name AS base_uom_name, u.dimension AS uom_dimension,
         i.hsn_code, i.gst_rate_pct, i.standard_selling_price, i.standard_purchase_rate,
         i.min_reorder_level, i.packets_per_carton, i.is_active,
+        COALESCE(cs.closing_stock_base_qty, 0) AS current_stock_qty,
+        COALESCE(cs.current_moving_wac, i.standard_purchase_rate, 0) AS current_wac,
         i.created_at, i.updated_at
       FROM items i
       JOIN units_of_measure u ON i.base_uom_id = u.id
+      LEFT JOIN v_current_stock cs ON cs.item_id = i.id
       WHERE i.id = $1;
     `;
     const res = await query(text, [id]);
