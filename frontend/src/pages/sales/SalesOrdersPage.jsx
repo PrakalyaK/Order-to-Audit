@@ -342,19 +342,24 @@ export const SalesOrdersPage = () => {
                   <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4 font-mono font-semibold text-blue-600">{o.order_number}</td>
                     <td className="py-3 px-4 font-semibold text-slate-900">{o.customer_name}</td>
-                    <td className="py-3 px-4 text-slate-500">{o.order_date}</td>
+                    <td className="py-3 px-4 text-slate-500">
+                      {o.order_date ? (o.order_date.includes('T') ? o.order_date.split('T')[0] : o.order_date) : '—'}
+                    </td>
                     <td className="py-3 px-4 text-right font-medium">
                       ₹{parseFloat(o.subtotal_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3 px-4 text-right text-slate-500">
-                      ₹{(
-                        parseFloat(o.cgst_amount || 0) +
-                        parseFloat(o.sgst_amount || 0) +
-                        parseFloat(o.igst_amount || 0)
+                      ₹{parseFloat(
+                        o.estimated_tax_amount !== undefined && o.estimated_tax_amount !== null
+                          ? o.estimated_tax_amount
+                          : (o.tax_amount !== undefined && o.tax_amount !== null
+                            ? o.tax_amount
+                            : ((parseFloat(o.cgst_amount || 0) + parseFloat(o.sgst_amount || 0) + parseFloat(o.igst_amount || 0)) ||
+                               Math.max(0, parseFloat(o.total_order_value || o.total_amount || 0) - parseFloat(o.subtotal_amount || 0))))
                       ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3 px-4 text-right font-bold text-slate-900">
-                      ₹{parseFloat(o.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{parseFloat(o.total_order_value || o.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-3 px-4 text-center">{getStatusBadge(o.status)}</td>
                     <td className="py-3 px-4 text-center">
