@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/client';
 import { Card, Button, Badge, LoadingSpinner, Modal, EmptyState } from '../../components/ui';
-import { ShoppingCart, Plus, CheckCircle, Truck, FileText, Search, XCircle, AlertTriangle, Eye, ShieldCheck } from 'lucide-react';
+import { ShoppingCart, Plus, CheckCircle, Truck, FileText, Search, XCircle, AlertTriangle, Eye, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAuth, ROLES } from '../../context/AuthContext';
 
 export const SalesOrdersPage = () => {
@@ -15,12 +15,12 @@ export const SalesOrdersPage = () => {
     return Array.isArray(raw) ? raw : [];
   });
   const [customers, setCustomers] = useState(() => {
-    const cached = api.getCached?.('/parties', { party_type: 'customer' });
+    const cached = api.getCached?.('/parties', { party_type: 'customer', limit: 100 }) || api.getCached?.('/parties', { party_type: 'customer' });
     const raw = cached?.data?.parties ?? cached?.data;
     return Array.isArray(raw) ? raw : [];
   });
   const [items, setItems] = useState(() => {
-    const cached = api.getCached?.('/items', { item_type: 'finished_good' });
+    const cached = api.getCached?.('/items', { item_type: 'finished_good', limit: 100 }) || api.getCached?.('/items', { item_type: 'finished_good' });
     const raw = cached?.data?.items ?? cached?.data;
     return Array.isArray(raw) ? raw : [];
   });
@@ -55,8 +55,8 @@ export const SalesOrdersPage = () => {
       setError('');
       const [ordersRes, partiesRes, itemsRes] = await Promise.allSettled([
         api.get('/sales-orders'),
-        api.get('/parties?party_type=customer'),
-        api.get('/items?item_type=finished_good'),
+        api.get('/parties', { params: { party_type: 'customer', limit: 100 } }),
+        api.get('/items', { params: { item_type: 'finished_good', limit: 100 } }),
       ]);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.success) {
@@ -144,10 +144,38 @@ export const SalesOrdersPage = () => {
     }
   };
 
+  const handleOpenCreateModal = async () => {
+    setCreateModalOpen(true);
+    if (customers.length === 0 || items.length === 0) {
+      try {
+        const [partiesRes, itemsRes] = await Promise.allSettled([
+          api.get('/parties', { params: { party_type: 'customer', limit: 100 } }),
+          api.get('/items', { params: { item_type: 'finished_good', limit: 100 } }),
+        ]);
+        if (partiesRes.status === 'fulfilled' && partiesRes.value?.success) {
+          const raw = partiesRes.value.data?.parties ?? partiesRes.value.data;
+          if (Array.isArray(raw)) setCustomers(raw);
+        }
+        if (itemsRes.status === 'fulfilled' && itemsRes.value?.success) {
+          const raw = itemsRes.value.data?.items ?? itemsRes.value.data;
+          if (Array.isArray(raw)) setItems(raw);
+        }
+      } catch (_) {}
+    }
+  };
+
   const handleAddItemRow = () => {
     setForm({
       ...form,
       items: [...form.items, { item_id: '', quantity: 10, unit_price: 35 }],
+    });
+  };
+
+  const handleRemoveItemRow = (index) => {
+    if (form.items.length <= 1) return;
+    setForm({
+      ...form,
+      items: form.items.filter((_, idx) => idx !== index),
     });
   };
 
@@ -229,7 +257,7 @@ export const SalesOrdersPage = () => {
           </p>
         </div>
         {canCreate && (
-          <Button onClick={() => setCreateModalOpen(true)} icon={Plus} size="sm">
+          <Button onClick={handleOpenCreateModal} icon={Plus} size="sm">
             New Sales Order
           </Button>
         )}
@@ -549,7 +577,7 @@ export const SalesOrdersPage = () => {
                 onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
                 className="w-full border border-slate-300 rounded-lg p-2"
               >
-                <option value="">Select Customer...</option>
+                <option value="">{customers.length === 0 ? 'Loading customers...' : 'Select Customer...'}</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.trade_name || c.party_name} ({c.state_name || 'Tamil Nadu'})
@@ -580,25 +608,25 @@ export const SalesOrdersPage = () => {
             </div>
             <div className="space-y-3">
               {form.items.map((row, idx) => (
-                <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-3 bg-slate-50 rounded-lg border border-slate-200 items-start">
                   <div className="sm:col-span-5">
-                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Product</label>
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Product *</label>
                     <select
                       required
                       value={row.item_id}
                       onChange={(e) => handleItemChange(idx, 'item_id', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white"
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="">Select Product...</option>
+                      <option value="">{items.length === 0 ? "Loading products..." : "Select Product..."}</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.id}>
-                          {it.name} ({it.sku})
+                          {it.name} ({it.sku}) — ₹{parseFloat(it.standard_selling_price || 0).toFixed(2)} [Stock: {parseFloat(it.current_stock_qty ?? it.closing_stock_base_qty ?? 0).toFixed(0)} avail]
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div className="sm:col-span-3">
-                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Quantity (Packets)</label>
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Quantity (Packets) *</label>
                     <input
                       type="number"
                       step="1"
@@ -606,18 +634,18 @@ export const SalesOrdersPage = () => {
                       required
                       value={row.quantity}
                       onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono font-bold bg-white"
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono font-bold bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Unit Price (₹)</label>
+                    <label className="text-[10px] font-semibold text-slate-500 block mb-1">Unit Price (₹) *</label>
                     <input
                       type="number"
                       step="0.01"
                       required
                       value={row.unit_price}
                       onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white"
+                      className="w-full border border-slate-300 rounded-lg p-2 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                   <div className="sm:col-span-2 flex items-center sm:block justify-between">
@@ -625,6 +653,18 @@ export const SalesOrdersPage = () => {
                     <div className="py-2 font-mono font-bold text-slate-900 text-sm">
                       ₹{((Number(row.quantity) || 0) * (Number(row.unit_price) || 0)).toFixed(2)}
                     </div>
+                  </div>
+                  <div className="sm:col-span-1 flex items-center justify-end sm:justify-center pt-2 sm:pt-6">
+                    {form.items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItemRow(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

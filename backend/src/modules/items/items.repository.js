@@ -11,25 +11,25 @@ export const itemsRepository = {
     let paramIndex = 1;
 
     if (search) {
-      conditions.push(`(sku ILIKE $${paramIndex} OR name ILIKE $${paramIndex} OR hsn_code ILIKE $${paramIndex})`);
+      conditions.push(`(i.sku ILIKE $${paramIndex} OR i.name ILIKE $${paramIndex} OR i.hsn_code ILIKE $${paramIndex})`);
       params.push(`%${search}%`);
       paramIndex++;
     }
 
     if (item_type) {
-      conditions.push(`item_type = $${paramIndex}`);
+      conditions.push(`i.item_type = $${paramIndex}`);
       params.push(item_type);
       paramIndex++;
     }
 
     if (is_active !== undefined) {
-      conditions.push(`is_active = $${paramIndex}`);
+      conditions.push(`i.is_active = $${paramIndex}`);
       params.push(is_active);
       paramIndex++;
     }
 
     if (base_uom_id) {
-      conditions.push(`base_uom_id = $${paramIndex}`);
+      conditions.push(`i.base_uom_id = $${paramIndex}`);
       params.push(base_uom_id);
       paramIndex++;
     }
@@ -37,7 +37,7 @@ export const itemsRepository = {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // Count total records
-    const countSql = `SELECT COUNT(*) AS total FROM items ${whereClause};`;
+    const countSql = `SELECT COUNT(*) AS total FROM items i ${whereClause};`;
     const countRes = await query(countSql, params);
     const total = parseInt(countRes.rows[0].total, 10);
 
