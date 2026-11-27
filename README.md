@@ -4,9 +4,20 @@
 > Built with Node.js 22, Express.js 4, PostgreSQL 17, React 19, Vite, Tailwind CSS, and Docker.  
 > Developed for **NIT Tiruchirappalli Internship Evaluation Assessment**.
 
+[![Live Demo](https://img.shields.io/badge/Live%20App-order--to--audit.vercel.app-brightgreen?style=flat&logo=vercel)](https://order-to-audit.vercel.app/login)
+[![Demo Video](https://img.shields.io/badge/Demo%20Video-Google%20Drive-red?style=flat&logo=google-drive)](https://drive.google.com/file/d/1F1pB0v2NQg9IO3Z3G0gBx8hnqt0bSdix/view?usp=sharing)
 [![CI / Integration Tests](https://img.shields.io/badge/tests-214%20passed%20%7C%200%20failed-brightgreen)](file:///backend/tests)
 [![Benchmark Verification](https://img.shields.io/badge/benchmark-44%2F44%20verified%20(100%25)-blue)](file:///scratch/verify_benchmark_official.js)
 [![License](https://img.shields.io/badge/evaluation-NIT%20Tiruchirappalli-orange)]()
+
+---
+
+### 🌐 Key Links & Deliverables
+
+| Deliverable | Access Link | Description |
+| :--- | :--- | :--- |
+| 🚀 **Live Production Application** | [order-to-audit.vercel.app/login](https://order-to-audit.vercel.app/login) | Full live cloud deployment on Vercel + Neon Cloud PostgreSQL |
+| 🎬 **Walkthrough Demo Video** | [Watch Demo on Google Drive](https://drive.google.com/file/d/1F1pB0v2NQg9IO3Z3G0gBx8hnqt0bSdix/view?usp=sharing) | Complete step-by-step video demonstration of the benchmark workflow |
 
 ---
 
@@ -48,7 +59,18 @@ flowchart TD
 
 ## 2. Quick Start Guide
 
-### Option A: Single-Command Docker Launch (Recommended)
+### Option 0: Live Cloud ERP (Instant Access)
+
+Explore the fully operational cloud deployment immediately with zero local installation:
+
+- **Live Application**: [https://order-to-audit.vercel.app/login](https://order-to-audit.vercel.app/login)
+- **Demo Video Walkthrough**: [Watch on Google Drive](https://drive.google.com/file/d/1F1pB0v2NQg9IO3Z3G0gBx8hnqt0bSdix/view?usp=sharing)
+- **Live Database**: Powered by Neon Cloud Serverless PostgreSQL with atomic PL/pgSQL posting functions.
+- *Use the built-in **1-Click Persona Switcher** on the login screen to switch between all 5 roles (Owner, Factory Admin, Floor Supervisor, Salesman, Auditor).*
+
+---
+
+### Option A: Single-Command Docker Launch (Local)
 
 Run the entire ERP application, database, migrations, and benchmark dataset with a single command:
 
