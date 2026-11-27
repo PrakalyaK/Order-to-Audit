@@ -178,6 +178,7 @@ export const productionService = {
         updatedInputs.push({
           item_id: inp.item_id,
           actual_issued_qty: actualIssued,
+          actual_consumed_qty: null,
           good_production_qty: 0.0000,
           damaged_or_scrap_qty: 0.0000,
           returned_to_store_qty: 0.0000,

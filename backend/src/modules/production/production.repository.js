@@ -140,7 +140,7 @@ export const productionRepository = {
         pri.item_id,
         pri.planned_qty,
         pri.actual_issued_qty,
-        COALESCE(pri.base_net_consumed_qty, pri.good_production_qty + pri.damaged_or_scrap_qty, pri.actual_issued_qty) AS actual_consumed_qty,
+        pri.actual_consumed_qty,
         pri.good_production_qty,
         pri.damaged_or_scrap_qty,
         pri.returned_to_store_qty,
@@ -341,17 +341,19 @@ export const productionRepository = {
         const updateSql = `
           UPDATE production_run_inputs
           SET actual_issued_qty = $1,
-              good_production_qty = $2,
-              damaged_or_scrap_qty = $3,
-              returned_to_store_qty = $4,
-              base_net_consumed_qty = $5
-          WHERE production_run_id = $6 AND item_id = $7;
+              actual_consumed_qty = $2,
+              good_production_qty = $3,
+              damaged_or_scrap_qty = $4,
+              returned_to_store_qty = $5,
+              base_net_consumed_qty = $6
+          WHERE production_run_id = $7 AND item_id = $8;
         `;
         await activeClient.query(updateSql, [
           item.actual_issued_qty,
-          item.good_production_qty,
-          item.damaged_or_scrap_qty,
-          item.returned_to_store_qty,
+          item.actual_consumed_qty !== undefined ? item.actual_consumed_qty : null,
+          item.good_production_qty || 0.0000,
+          item.damaged_or_scrap_qty || 0.0000,
+          item.returned_to_store_qty || 0.0000,
           item.base_net_consumed_qty,
           runId,
           item.item_id,

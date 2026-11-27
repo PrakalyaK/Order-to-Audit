@@ -109,11 +109,15 @@ BEGIN
 
         v_issue_cost := ROUND(v_computed_issued * v_stock.current_moving_wac, 2);
 
-        -- Pin Moving WAC at issue time and initialize issuance
+        -- Pin Moving WAC at issue time and initialize issuance (reset consumption fields for Stage 4)
         UPDATE production_run_inputs 
         SET unit_cost_applied = v_stock.current_moving_wac,
             base_net_consumed_qty = v_computed_issued,
-            total_material_cost = v_issue_cost
+            total_material_cost = v_issue_cost,
+            actual_consumed_qty = NULL,
+            good_production_qty = 0.0000,
+            damaged_or_scrap_qty = 0.0000,
+            returned_to_store_qty = 0.0000
         WHERE id = v_input.id;
 
         -- Decrement store stock upon material issue to production floor WIP
