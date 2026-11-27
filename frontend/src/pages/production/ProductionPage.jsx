@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import api from '../../api/client';
 import { Card, StatCard, Button, Badge, LoadingSpinner, Modal, EmptyState } from '../../components/ui';
 import {
@@ -30,7 +30,8 @@ import {
   TrendingUp,
   User,
   Wrench,
-  Zap
+  Zap,
+  Calculator,
 } from 'lucide-react';
 import { useAuth, ROLES } from '../../context/AuthContext';
 
@@ -1399,11 +1400,18 @@ export const ProductionPage = () => {
           </div>
         </div>
 
-        {canManage && (
-          <Button onClick={() => handleOpenCreateModal()} icon={Plus} size="sm">
-            Schedule Production Run
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Link to="/production/costing">
+            <Button variant="outline" size="sm" icon={Calculator}>
+              Production Costing
+            </Button>
+          </Link>
+          {canManage && (
+            <Button onClick={() => handleOpenCreateModal()} icon={Plus} size="sm">
+              Schedule Production Run
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPI Stats */}

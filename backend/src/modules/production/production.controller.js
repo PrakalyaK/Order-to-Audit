@@ -68,3 +68,29 @@ export const getCosting = asyncHandler(async (req, res) => {
     data: costing,
   });
 });
+
+export const recordOverheads = asyncHandler(async (req, res) => {
+  const result = await productionService.recordOverheads(req.params.id, req.user.id, req.body);
+  res.status(200).json({
+    success: true,
+    message: 'Production expenses recorded and batch costing updated successfully',
+    data: result,
+  });
+});
+
+export const deleteOverhead = asyncHandler(async (req, res) => {
+  const result = await productionService.deleteOverhead(req.params.id, req.params.overheadId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: 'Production expense deleted and costing updated',
+    data: result,
+  });
+});
+
+export const getCostingSummary = asyncHandler(async (req, res) => {
+  const result = await productionService.getAllCostingSummary();
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});

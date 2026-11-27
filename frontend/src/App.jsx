@@ -17,6 +17,7 @@ import { UsersPage } from './pages/master/UsersPage';
 import { PurchasesPage } from './pages/purchases/PurchasesPage';
 import { InventoryPage } from './pages/inventory/InventoryPage';
 import { ProductionPage } from './pages/production/ProductionPage';
+import { ProductionCostingPage } from './pages/production/ProductionCostingPage';
 import { SalesOrdersPage } from './pages/sales/SalesOrdersPage';
 import { FulfilmentPage } from './pages/sales/FulfilmentPage';
 import { InvoicesPage } from './pages/sales/InvoicesPage';
@@ -106,6 +107,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
                   <ProductionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="production/costing"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR]}>
+                  <ProductionCostingPage />
                 </ProtectedRoute>
               }
             />

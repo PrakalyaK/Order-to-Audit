@@ -249,8 +249,13 @@ export const paymentsRepository = {
         c.trade_name AS customer_name,
         c.gstin AS customer_gstin,
         u.username AS recorded_by_username,
+        p.total_amount AS amount,
+        p.receipt_number AS reference_number,
+        p.payment_mode AS payment_method,
         COALESCE(pa.total_allocated, 0.00) AS total_allocated,
-        ROUND(p.total_amount - COALESCE(pa.total_allocated, 0.00), 2) AS unallocated_amount
+        COALESCE(pa.total_allocated, 0.00) AS allocated_amount,
+        ROUND(p.total_amount - COALESCE(pa.total_allocated, 0.00), 2) AS unallocated_amount,
+        (p.status = 'reversed') AS is_reversed
       FROM payments p
       JOIN parties c ON p.customer_id = c.id
       JOIN users u ON p.recorded_by = u.id

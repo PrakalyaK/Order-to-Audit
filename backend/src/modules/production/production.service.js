@@ -509,21 +509,90 @@ export const productionService = {
       throw ApiError.notFound(`Production run with ID '${id}' not found`);
     }
 
-    const costing = await productionRepository.getCosting(id);
+    let costing = await productionRepository.getCosting(id);
     if (!costing) {
-      throw ApiError.notFound(`Costing is not available for production run '${run.run_number}'. Costing is generated upon yield completion.`);
+      costing = await productionRepository.recalculateCosting(id);
     }
+    const overheads = await productionRepository.getOverheads(id);
 
     return {
       production_run_id: run.id,
       run_number: run.run_number,
       status: run.status,
+      run_date: run.run_date,
       finished_good: {
+        id: run.finished_good_item_id,
         sku: run.finished_good_sku,
         name: run.finished_good_name,
       },
+      planned_batch_count: run.planned_batch_count,
+      standard_batch_size: run.standard_batch_size,
+      actual_good_output_qty: run.actual_good_output_qty,
       costing,
-      overheads: run.overheads,
+      overheads,
+      inputs: run.inputs,
     };
+  },
+
+  /**
+   * Record or update additional expenses/overheads for a production run
+   */
+  async recordOverheads(id, userId, overheadData) {
+    const run = await productionRepository.findById(id);
+    if (!run) {
+      throw ApiError.notFound(`Production run with ID '${id}' not found`);
+    }
+
+    let overheadsList = [];
+    if (Array.isArray(overheadData.overheads)) {
+      overheadsList = overheadData.overheads;
+    } else if (overheadData.overhead_type && overheadData.amount !== undefined) {
+      // Single overhead item: append to existing overheads
+      const current = await productionRepository.getOverheads(id);
+      overheadsList = [...current, {
+        overhead_type: overheadData.overhead_type,
+        description: overheadData.description || null,
+        amount: Number(overheadData.amount),
+      }];
+    } else if (Array.isArray(overheadData)) {
+      overheadsList = overheadData;
+    } else {
+      throw ApiError.badRequest('Invalid overhead payload format. Expected overhead_type and amount.');
+    }
+
+    await productionRepository.saveOverheads(id, overheadsList);
+    const costing = await productionRepository.recalculateCosting(id);
+
+    return {
+      production_run_id: run.id,
+      run_number: run.run_number,
+      overheads: await productionRepository.getOverheads(id),
+      costing,
+    };
+  },
+
+  /**
+   * Delete an overhead expense and recalculate costing
+   */
+  async deleteOverhead(id, overheadId, userId) {
+    const run = await productionRepository.findById(id);
+    if (!run) {
+      throw ApiError.notFound(`Production run with ID '${id}' not found`);
+    }
+
+    const costing = await productionRepository.deleteOverhead(id, overheadId);
+    return {
+      production_run_id: run.id,
+      run_number: run.run_number,
+      overheads: await productionRepository.getOverheads(id),
+      costing,
+    };
+  },
+
+  /**
+   * Get costing summary across all production runs
+   */
+  async getAllCostingSummary() {
+    return await productionRepository.getAllCostingSummary();
   },
 };

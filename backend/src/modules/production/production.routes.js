@@ -52,6 +52,13 @@ router.get(
   productionController.getById
 );
 
+// GET /api/v1/production/costing/summary - Get costing summary across all runs
+router.get(
+  '/costing/summary',
+  authorizeRoles(...VIEW_ROLES),
+  productionController.getCostingSummary
+);
+
 // GET /api/v1/production/:id/variance - Get mass balance & production variance
 router.get(
   '/:id/variance',
@@ -64,6 +71,20 @@ router.get(
   '/:id/costing',
   authorizeRoles(...VIEW_ROLES),
   productionController.getCosting
+);
+
+// POST /api/v1/production/:id/overheads - Record additional production expenses/overheads
+router.post(
+  '/:id/overheads',
+  authorizeRoles(...OPS_ROLES),
+  productionController.recordOverheads
+);
+
+// DELETE /api/v1/production/:id/overheads/:overheadId - Delete production expense
+router.delete(
+  '/:id/overheads/:overheadId',
+  authorizeRoles(...OPS_ROLES),
+  productionController.deleteOverhead
 );
 
 // POST /api/v1/production - Create draft production run

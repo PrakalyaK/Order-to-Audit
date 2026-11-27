@@ -15,6 +15,7 @@ const ROUTE_TITLES = {
   '/purchases': 'Purchases & Goods Receipts (GRN) — Order-to-Audit ERP',
   '/inventory': 'Real-Time Inventory & Valuation — Order-to-Audit ERP',
   '/production': 'Production & Batch Yield Tracking — Order-to-Audit ERP',
+  '/production/costing': 'Production Costing & Direct Overheads — Order-to-Audit ERP',
   '/sales/orders': 'Sales Orders — Order-to-Audit ERP',
   '/sales/fulfilment': 'Order Fulfilment & Production Planning — Order-to-Audit ERP',
   '/sales/invoices': 'Tax Invoices & GST Compliance — Order-to-Audit ERP',

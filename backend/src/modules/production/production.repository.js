@@ -140,7 +140,7 @@ export const productionRepository = {
         pri.item_id,
         pri.planned_qty,
         pri.actual_issued_qty,
-        COALESCE(pri.actual_consumed_qty, pri.good_production_qty + pri.damaged_or_scrap_qty, pri.actual_issued_qty) AS actual_consumed_qty,
+        COALESCE(pri.base_net_consumed_qty, pri.good_production_qty + pri.damaged_or_scrap_qty, pri.actual_issued_qty) AS actual_consumed_qty,
         pri.good_production_qty,
         pri.damaged_or_scrap_qty,
         pri.returned_to_store_qty,
@@ -483,5 +483,162 @@ export const productionRepository = {
     `;
     const res = await query(sql, [runId]);
     return res.rows[0] || null;
+  },
+
+  /**
+   * Get overhead expenses for a production run
+   */
+  async getOverheads(runId) {
+    const sql = `
+      SELECT id, production_run_id, overhead_type, description, amount
+      FROM production_run_overheads
+      WHERE production_run_id = $1
+      ORDER BY id ASC;
+    `;
+    const res = await query(sql, [runId]);
+    return res.rows;
+  },
+
+  /**
+   * Recalculate production run costing from material inputs, overheads, and output
+   */
+  async recalculateCosting(runId, client = null) {
+    const runner = client || { query };
+    const sql = `
+      INSERT INTO production_run_costing (
+        production_run_id,
+        total_raw_material_cost,
+        total_packaging_cost,
+        total_direct_overhead_cost,
+        gross_total_batch_cost,
+        good_output_units,
+        cost_per_packet,
+        selling_price_per_packet,
+        unit_gross_margin,
+        gross_margin_pct,
+        valuation_method_used,
+        calculated_at
+      )
+      SELECT 
+        pr.id,
+        COALESCE(m.raw_cost, 0.00),
+        COALESCE(m.pkg_cost, 0.00),
+        COALESCE(o.ovh_cost, 0.00),
+        ROUND(COALESCE(m.raw_cost, 0.00) + COALESCE(m.pkg_cost, 0.00) + COALESCE(o.ovh_cost, 0.00), 2),
+        COALESCE(NULLIF(pr.actual_good_output_qty, 0), (pr.planned_batch_count * pr.standard_batch_size)),
+        ROUND(
+          (COALESCE(m.raw_cost, 0.00) + COALESCE(m.pkg_cost, 0.00) + COALESCE(o.ovh_cost, 0.00)) / 
+          NULLIF(COALESCE(NULLIF(pr.actual_good_output_qty, 0), (pr.planned_batch_count * pr.standard_batch_size)), 0), 
+          4
+        ),
+        fg.standard_selling_price,
+        ROUND(
+          fg.standard_selling_price - (
+            (COALESCE(m.raw_cost, 0.00) + COALESCE(m.pkg_cost, 0.00) + COALESCE(o.ovh_cost, 0.00)) / 
+            NULLIF(COALESCE(NULLIF(pr.actual_good_output_qty, 0), (pr.planned_batch_count * pr.standard_batch_size)), 0)
+          ), 
+          2
+        ),
+        ROUND(
+          (
+            (fg.standard_selling_price - (
+              (COALESCE(m.raw_cost, 0.00) + COALESCE(m.pkg_cost, 0.00) + COALESCE(o.ovh_cost, 0.00)) / 
+              NULLIF(COALESCE(NULLIF(pr.actual_good_output_qty, 0), (pr.planned_batch_count * pr.standard_batch_size)), 0)
+            )) / NULLIF(fg.standard_selling_price, 0)
+          ) * 100.0, 
+          2
+        ),
+        'WEIGHTED_AVERAGE',
+        NOW()
+      FROM production_runs pr
+      JOIN items fg ON pr.finished_good_item_id = fg.id
+      LEFT JOIN (
+        SELECT 
+          production_run_id,
+          COALESCE(SUM(CASE WHEN i.item_type = 'raw_material' THEN pri.total_material_cost ELSE 0 END), 0.00) AS raw_cost,
+          COALESCE(SUM(CASE WHEN i.item_type = 'packaging' THEN pri.total_material_cost ELSE 0 END), 0.00) AS pkg_cost
+        FROM production_run_inputs pri
+        JOIN items i ON pri.item_id = i.id
+        WHERE pri.production_run_id = $1
+        GROUP BY production_run_id
+      ) m ON pr.id = m.production_run_id
+      LEFT JOIN (
+        SELECT 
+          production_run_id,
+          COALESCE(SUM(amount), 0.00) AS ovh_cost
+        FROM production_run_overheads
+        WHERE production_run_id = $1
+        GROUP BY production_run_id
+      ) o ON pr.id = o.production_run_id
+      WHERE pr.id = $1
+      ON CONFLICT (production_run_id) DO UPDATE SET
+        total_raw_material_cost = EXCLUDED.total_raw_material_cost,
+        total_packaging_cost = EXCLUDED.total_packaging_cost,
+        total_direct_overhead_cost = EXCLUDED.total_direct_overhead_cost,
+        gross_total_batch_cost = EXCLUDED.gross_total_batch_cost,
+        good_output_units = EXCLUDED.good_output_units,
+        cost_per_packet = EXCLUDED.cost_per_packet,
+        selling_price_per_packet = EXCLUDED.selling_price_per_packet,
+        unit_gross_margin = EXCLUDED.unit_gross_margin,
+        gross_margin_pct = EXCLUDED.gross_margin_pct,
+        calculated_at = NOW()
+      RETURNING *;
+    `;
+    const res = await runner.query(sql, [runId]);
+    return res.rows[0] || null;
+  },
+
+  /**
+   * Delete an overhead entry and recalculate costing
+   */
+  async deleteOverhead(runId, overheadId, client = null) {
+    const runner = client || { query };
+    await runner.query(
+      'DELETE FROM production_run_overheads WHERE id = $1 AND production_run_id = $2;',
+      [overheadId, runId]
+    );
+    return await this.recalculateCosting(runId, client);
+  },
+
+  /**
+   * Get costing summary across all production runs
+   */
+  async getAllCostingSummary() {
+    const sql = `
+      SELECT 
+        pr.id AS production_run_id,
+        pr.run_number,
+        pr.run_date,
+        pr.status,
+        fg.name AS finished_good_name,
+        fg.sku AS finished_good_sku,
+        pr.actual_good_output_qty,
+        pr.planned_batch_count,
+        pr.standard_batch_size,
+        c.total_raw_material_cost,
+        c.total_packaging_cost,
+        c.total_direct_overhead_cost,
+        c.gross_total_batch_cost,
+        c.cost_per_packet,
+        c.selling_price_per_packet,
+        c.unit_gross_margin,
+        c.gross_margin_pct,
+        c.calculated_at,
+        COALESCE(
+          (SELECT json_agg(json_build_object(
+            'id', o.id, 
+            'overhead_type', o.overhead_type, 
+            'description', o.description, 
+            'amount', o.amount
+          )) FROM production_run_overheads o WHERE o.production_run_id = pr.id),
+          '[]'::json
+        ) AS overheads
+      FROM production_runs pr
+      JOIN items fg ON pr.finished_good_item_id = fg.id
+      LEFT JOIN production_run_costing c ON pr.id = c.production_run_id
+      ORDER BY pr.run_date DESC, pr.created_at DESC;
+    `;
+    const res = await query(sql);
+    return res.rows;
   },
 };

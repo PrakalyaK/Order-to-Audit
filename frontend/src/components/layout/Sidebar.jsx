@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   UserCheck,
   Truck,
+  Calculator,
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -49,6 +50,7 @@ export const Sidebar = () => {
         { name: t('navPurchases'), path: '/purchases', icon: ShoppingBag, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.AUDITOR] },
         { name: t('navInventory'), path: '/inventory', icon: Boxes, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
         { name: t('navProduction'), path: '/production', icon: Factory, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
+        { name: t('navProductionCosting') || 'Production Costing', path: '/production/costing', icon: Calculator, roles: [ROLES.OWNER, ROLES.FACTORY_ADMIN, ROLES.PRODUCTION_SUPERVISOR, ROLES.AUDITOR] },
       ],
     },
     {
